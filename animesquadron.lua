@@ -59,6 +59,7 @@ local _defaults = {
     autoEvo           = false,
     evoTargets        = {},    -- unit names to awaken in priority order: {"Goki (SSJ4)", "Caska"}
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
+    webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
     webhookOnVictory  = false,
     webhookOnDefeat   = false,
     webhookOnEvoReady = false,
@@ -168,6 +169,11 @@ local function buildStageEmbed(resultText, stage, act, elapsed, pd, runCount)
         color  = isVictory and 3066993 or 15158332,
         fields = fields,
     }
+end
+
+local function evoPing()
+    local id = NS.settings.webhookUserId
+    return (id and id ~= "") and ("<@" .. id .. "> ") or ""
 end
 
 NS.webhookTest = function()
@@ -458,12 +464,25 @@ local function setupEndScreenHook(player, remotes)
             local awData = NS.data.awaken[targetName]
             if awData and pd then
                 local missing = computeMissing(awData.cost, pd.items or {})
+                -- Check for newly completed mats this run and ping once per mat
+                NS.evoNotifiedMats = NS.evoNotifiedMats or {}
+                local inv = pd.items or {}
+                for mat, needed in pairs(awData.cost) do
+                    if (inv[mat] or 0) >= needed and not NS.evoNotifiedMats[mat] then
+                        NS.evoNotifiedMats[mat] = true
+                        if NS.settings.webhookOnEvoReady then
+                            sendWebhook(evoPing() .. "✅ **" .. mat .. "** x" .. needed .. " collected for **" .. targetName .. "**!")
+                        end
+                    end
+                end
+
                 if not next(missing) then
                     log("Evo: all materials for " .. targetName .. " collected! Returning to lobby.")
                     if NS.settings.webhookOnEvoReady then
-                        sendWebhook("🎉 Evo ready! **" .. targetName .. "** has all materials — ready to awaken!")
+                        sendWebhook(evoPing() .. "🎉 Evo ready! **" .. targetName .. "** has all materials — ready to awaken!")
                     end
                     NS.evoFarmStage = nil
+                    NS.evoNotifiedMats = nil
                     remotes.teleport:FireServer()
                     return
                 else
@@ -1305,9 +1324,22 @@ local function setupGUI()
         end
     })
 
+    Tabs.Webhook:AddInput("webhookUserId", {
+        Title       = "Ping User ID",
+        Description = "Your Discord User ID — leave empty to send without a ping",
+        Default     = NS.settings.webhookUserId or "",
+        Placeholder = "123456789012345678",
+        Numeric     = false,
+        Finished    = true,
+        Callback    = function(Value)
+            NS.settings.webhookUserId = Value
+            State.saveSettings()
+        end
+    })
+
     addToggle(Tabs.Webhook, "webhookOnVictory",  "Notify on Victory",      "Send a stage summary embed to Discord on victory")
     addToggle(Tabs.Webhook, "webhookOnDefeat",   "Notify on Defeat",       "Ping Discord on defeat")
-    addToggle(Tabs.Webhook, "webhookOnEvoReady", "Notify when Evo Ready",  "Ping Discord when all evo materials are collected")
+    addToggle(Tabs.Webhook, "webhookOnEvoReady", "Notify when Evo Ready",  "Ping you when a mat is done or all mats are collected")
 
     Tabs.Webhook:AddButton({
         Title       = "Test Webhook",
