@@ -1,0 +1,21 @@
+-- Auto-generated awakening data
+return {
+    ["Shinks"]={awakensTo="Shinks (Emperor)",cost={["Pelli"]=100,["Beastblood Catalyst"]=20,["Gold"]=5000,["King's Haki Residue"]=3,["Stormwake Sailcloth"]=40,["Meat"]=200,["Gryphon"]=1}},
+    ["Big Beard"]={awakensTo="Big Beard (Father)",cost={["Pelli"]=100,["Beastblood Catalyst"]=10,["Gold"]=5000,["Depthglass Bottle"]=50,["Bisento"]=1,["Meat"]=200,["Stormwake Sailcloth"]=100}},
+    ["Vegata (SSJ4)"]={awakensTo="Vegata (SSJ4 Full Power)",cost={["Stellar Ki Quartz"]=50,["Limitbreak Obsidian"]=30,["Gold"]=5000,["Zeni"]=100,["Scouter"]=1,["Ki Resonant Crystal"]=70,["Senzu"]=200}},
+    ["Rizzuto"]={awakensTo="Rizzuto (Sage)",cost={["Shuriken"]=1,["Narutomaki"]=200,["Gold"]=5000,["Genjutsu Fog Vial"]=30,["Headband"]=100,["Binding Cloth"]=50,["Shinobi Bone"]=100}},
+    ["Woo"]={awakensTo="Woo (Shadow)",cost={["Eclipse Godstone"]=5,["Pelli"]=100,["Chakra Fragment"]=5,["Gold"]=5000,["King's Haki Residue"]=5,["Monarch Daggers"]=1,["Zeni"]=100,["Headband"]=100}},
+    ["Super Beby 2"]={awakensTo="Big Beard (Father)",cost={["Beastblood Catalyst"]=5,["Gold"]=500,["Depthglass Bottle"]=25,["Bisento"]=1,["Meat"]=100,["Stormwake Sailcloth"]=50}},
+    ["Madora"]={awakensTo="Madora (Gunbai)",cost={["Gunbai"]=1,["Narutomaki"]=200,["Gold"]=5000,["Genjutsu Fog Vial"]=50,["Headband"]=200,["Chakra Fragment"]=6,["Fuin Script Paper"]=30}},
+    ["Karashi"]={awakensTo="Karashi (Sharingan)",cost={["Chakra Fragment"]=3,["Karashi's Book"]=1,["Gold"]=5000,["Fuin Script Paper"]=20,["Headband"]=100,["Shinobi Bone"]=100,["Narutomaki"]=200}},
+    ["Goki (SSJ4 Full Power)"]={awakensTo="Gometa (SSJ4)",cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Chakra Fragment"]=10,["Gold"]=5000,["Zeni"]=200,["Primal Core"]=1}},
+    ["Goki (SSJ4)"]={awakensTo="Goki (SSJ4 Full Power)",cost={["Eclipse Godstone"]=3,["Zenkai Ore"]=100,["Limitbreak Obsidian"]=20,["Gold"]=5000,["Zeni"]=100,["Power Pole"]=1,["Senzu"]=200}},
+    ["Shanron"]={awakensTo="Shanron (Omega)",cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Chakra Fragment"]=10,["Gold"]=5000,["Dragonballs"]=1,["Zeni"]=200}},
+    ["Puppeteer"]={awakensTo="Puppeteer (Transcendent)",cost={["Eclipse Godstone"]=10,["Pelli"]=100,["Chakra Fragment"]=10,["Gold"]=7500,["King's Haki Residue"]=10,["Headband"]=100,["Hogyoku Orb"]=1,["Zeni"]=100}},
+    ["Berserker"]={awakensTo="Berserker (Enraged)",cost={["Moonlit Silver"]=30,["Dragon Slayer (Evo)"]=1,["Black Sun Amber"]=15,["Apostle Iron"]=100,["Gold"]=5000,["Eclipse Stone"]=75,["Brand Ash"]=50,["Behelit"]=200,["White Behelit"]=50}},
+    ["Caska"]={awakensTo="Caska (Resiliance)",cost={["Moonlit Silver"]=20,["Behelit"]=100,["Black Sun Amber"]=5,["Apostle Iron"]=75,["Gold"]=5000,["Eclipse Stone"]=50,["Brand Ash"]=30,["Caskas Sword"]=1,["White Behelit"]=25}},
+    ["Skeleton Knight"]={awakensTo="Skeleton Knight (Resonance)",cost={["Sword Of Resonance"]=1,["Behelit"]=200,["Black Sun Amber"]=15,["Apostle Iron"]=100,["Gold"]=5000,["Eclipse Stone"]=75,["Brand Ash"]=50,["Moonlit Silver"]=30,["White Behelit"]=25}},
+    ["Falcon"]={awakensTo="Falcon (Dark)",cost={["Moonlit Silver"]=30,["Behelit"]=200,["Black Sun Amber"]=15,["Cavalry Saber"]=1,["Gold"]=5000,["Apostle Iron"]=100,["Eclipse Stone"]=75,["Brand Ash"]=50,["White Behelit"]=50}},
+    ["Baras"]={awakensTo="Baras (Meteoric Burst)",cost={["Black Sun Amber"]=10,["Pelli"]=100,["Chakra Fragment"]=10,["Gold"]=7500,["King's Haki Residue"]=10,["Headband"]=100,["Behelit"]=100,["Baras Eye"]=1}},
+    ["Garu"]={awakensTo="Garu (Half Monster)",cost={["Black Sun Amber"]=10,["Pelli"]=100,["Chakra Fragment"]=10,["Gold"]=7500,["King's Haki Residue"]=10,["Headband"]=100,["Behelit"]=100,["Hunters Cloth"]=1}},
+}
