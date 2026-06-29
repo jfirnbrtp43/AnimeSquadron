@@ -30,11 +30,11 @@ local NS = _G.AnimeSquadron
 --   Challenge extra field: challengeType = "30m" | "1d"
 NS.settings = NS.settings or {}
 local _defaults = {
-    autoStart         = true,
-    autoMaxSpeed      = true,
-    autoNext          = true,
-    autoReplay        = true,
-    autoLeave         = true,
+    autoStart         = false,
+    autoMaxSpeed      = false,
+    autoNext          = false,
+    autoReplay        = false,
+    autoLeave         = false,
     challengeReturn30 = false,
     autoUpgrade       = false,
     upgradeMode       = "max",   -- "max" | "cheapest"
@@ -499,6 +499,12 @@ local function setupEndScreenHook(player, remotes)
                 log("Evo: inventory check failed")
             end
         end
+
+        -- Re-snapshot inventory so next stage's diff only shows that run's gains
+        task.spawn(function()
+            local snapOk, snap = pcall(function() return remotes.playersGet:InvokeServer() end)
+            if snapOk and snap then NS.preStageInventory = snap.items or {} end
+        end)
 
     end)
 
