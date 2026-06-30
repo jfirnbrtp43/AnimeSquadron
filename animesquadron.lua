@@ -301,6 +301,7 @@ function ClearTime.update(stageName, act, elapsed)
     else
         entry.avg = entry.avg + EMA_ALPHA * (elapsed - entry.avg)
     end
+    if not entry.best or elapsed < entry.best then entry.best = elapsed end
 
     _data.clearTimes[key] = entry
     State.save()
@@ -1238,16 +1239,14 @@ local function setupGUI()
     })
 
     local Tabs = {
-        Farm    = Window:AddTab({ Title = "Farm",    Icon = "swords"        }),
-        Evo     = Window:AddTab({ Title = "Evo",     Icon = "star"          }),
-        Gear    = Window:AddTab({ Title = "Gear",    Icon = "hammer"        }),
-        Units   = Window:AddTab({ Title = "Units",   Icon = "shield"        }),
-        Join    = Window:AddTab({ Title = "Join",    Icon = "map-pin"       }),
-        Loot    = Window:AddTab({ Title = "Loot",    Icon = "package"       }),
-        Shops    = Window:AddTab({ Title = "Shops",    Icon = "shopping-cart" }),
-        Webhook  = Window:AddTab({ Title = "Webhook",  Icon = "bell"          }),
-        Priority = Window:AddTab({ Title = "Priority", Icon = "list"          }),
-        Info     = Window:AddTab({ Title = "Info",     Icon = "info"          }),
+        Farm    = Window:AddTab({ Title = "Farm",    Icon = "swords"   }),
+        Join    = Window:AddTab({ Title = "Join",    Icon = "map-pin"  }),
+        Evo     = Window:AddTab({ Title = "Evo",     Icon = "star"     }),
+        Gear    = Window:AddTab({ Title = "Gear",    Icon = "hammer"   }),
+        Upgrade = Window:AddTab({ Title = "Upgrade", Icon = "shield"   }),
+        Lobby   = Window:AddTab({ Title = "Lobby",   Icon = "package"  }),
+        Webhook = Window:AddTab({ Title = "Webhook", Icon = "bell"     }),
+        Info    = Window:AddTab({ Title = "Info",    Icon = "info"     }),
     }
 
     local function addToggle(tab, key, title, desc)
@@ -1316,10 +1315,10 @@ local function setupGUI()
         State.saveSettings()
     end)
 
-    -- ── Units ─────────────────────────────────────────────────────
-    addToggle(Tabs.Units, "autoUpgrade", "Auto Upgrade", "Automatically spend Yen to upgrade equipped units")
+    -- ── Upgrade ───────────────────────────────────────────────────
+    addToggle(Tabs.Upgrade, "autoUpgrade", "Auto Upgrade", "Automatically spend Yen to upgrade equipped units")
 
-    local upgradeModeDd = Tabs.Units:AddDropdown("upgradeMode", {
+    local upgradeModeDd = Tabs.Upgrade:AddDropdown("upgradeMode", {
         Title       = "Upgrade Mode",
         Description = "Max: fully upgrade one slot before moving on. Cheapest: one upgrade per slot in rotation.",
         Values      = { "max", "cheapest" },
@@ -1337,7 +1336,7 @@ local function setupGUI()
         for _, s in ipairs(NS.settings.upgradeSlots) do
             if s.slot == slotIdx then curPriority = s.priority; break end
         end
-        local sl = Tabs.Units:AddSlider("upgradeSlot" .. slotIdx, {
+        local sl = Tabs.Upgrade:AddSlider("upgradeSlot" .. slotIdx, {
             Title       = "Slot " .. slotIdx .. " Priority",
             Description = "0 = disabled. Lower number upgraded first.",
             Default     = curPriority,
@@ -1506,11 +1505,34 @@ local function setupGUI()
         end
     end
 
-    -- ── Loot ──────────────────────────────────────────────────────
-    addToggle(Tabs.Loot, "autoClaimQuests",  "Auto Claim Quests",  "Claim all completed quests on lobby load")
-    addToggle(Tabs.Loot, "autoClaimSpecial", "Auto Claim Special", "Claim special quest rewards on lobby load")
+    Tabs.Join:AddSection("Mode Priority")
+    for _, modeName in ipairs({ "Story", "Squadron", "Raid", "Challenge", "Infinite", "Permanent" }) do
+        local mn = modeName
+        local curPriority = 99
+        for _, m in ipairs(NS.settings.joinModes) do
+            if m.mode == mn then curPriority = m.priority or 99; break end
+        end
+        local sl = Tabs.Join:AddSlider("pri_" .. mn, {
+            Title       = mn,
+            Description = "Lower number = tried first when multiple modes are enabled",
+            Default     = curPriority,
+            Min         = 1,
+            Max         = 6,
+            Rounding    = 0,
+        })
+        sl:OnChanged(function(Value)
+            for _, m in ipairs(NS.settings.joinModes) do
+                if m.mode == mn then m.priority = Value; break end
+            end
+            State.saveSettings()
+        end)
+    end
 
-    local autoSellDd = Tabs.Loot:AddDropdown("autoSell", {
+    -- ── Lobby ─────────────────────────────────────────────────────
+    addToggle(Tabs.Lobby, "autoClaimQuests",  "Auto Claim Quests",  "Claim all completed quests on lobby load")
+    addToggle(Tabs.Lobby, "autoClaimSpecial", "Auto Claim Special", "Claim special quest rewards on lobby load")
+
+    local autoSellDd = Tabs.Lobby:AddDropdown("autoSell", {
         Title       = "Auto Sell",
         Description = "Automatically sell units of selected rarities after summoning",
         Values      = { "Rare", "Epic", "Legendary", "Mythic" },
@@ -1526,9 +1548,9 @@ local function setupGUI()
         State.saveSettings()
     end)
 
-    addToggle(Tabs.Loot, "autoSummon", "Auto Summon", "Summon on the selected banner on lobby load")
+    addToggle(Tabs.Lobby, "autoSummon", "Auto Summon", "Summon on the selected banner on lobby load")
 
-    local bannerDd = Tabs.Loot:AddDropdown("summonBanner", {
+    local bannerDd = Tabs.Lobby:AddDropdown("summonBanner", {
         Title   = "Banner",
         Values  = { "Basic Banner", "Selection Banner" },
         Multi   = false,
@@ -1539,7 +1561,7 @@ local function setupGUI()
         State.saveSettings()
     end)
 
-    local amountDd = Tabs.Loot:AddDropdown("summonAmount", {
+    local amountDd = Tabs.Lobby:AddDropdown("summonAmount", {
         Title   = "Summon Amount",
         Values  = { "1", "10" },
         Multi   = false,
@@ -1550,9 +1572,9 @@ local function setupGUI()
         State.saveSettings()
     end)
 
-    -- ── Shops ─────────────────────────────────────────────────────
-    addToggle(Tabs.Shops, "autoRaidShop", "Auto Raid Shop", "Buy configured items from the raid shop on lobby load")
-    addToggle(Tabs.Shops, "autoMerchant", "Auto Merchant",  "Buy configured items from the merchant on lobby load")
+    Tabs.Lobby:AddSection("Shops")
+    addToggle(Tabs.Lobby, "autoRaidShop", "Auto Raid Shop", "Buy configured items from the raid shop on lobby load")
+    addToggle(Tabs.Lobby, "autoMerchant", "Auto Merchant",  "Buy configured items from the merchant on lobby load")
 
     -- ── Webhook ───────────────────────────────────────────────────
     Tabs.Webhook:AddInput("webhookUrl", {
@@ -1592,30 +1614,6 @@ local function setupGUI()
         end
     })
 
-    -- ── Priority ──────────────────────────────────────────────────
-    Tabs.Priority:AddSection("Join Mode Order")
-    for _, modeName in ipairs({ "Story", "Squadron", "Raid", "Challenge", "Infinite", "Permanent" }) do
-        local mn = modeName
-        local curPriority = 99
-        for _, m in ipairs(NS.settings.joinModes) do
-            if m.mode == mn then curPriority = m.priority or 99; break end
-        end
-        local sl = Tabs.Priority:AddSlider("pri_" .. mn, {
-            Title       = mn,
-            Description = "Lower number = tried first when multiple modes are enabled",
-            Default     = curPriority,
-            Min         = 1,
-            Max         = 6,
-            Rounding    = 0,
-        })
-        sl:OnChanged(function(Value)
-            for _, m in ipairs(NS.settings.joinModes) do
-                if m.mode == mn then m.priority = Value; break end
-            end
-            State.saveSettings()
-        end)
-    end
-
     -- ── Info ──────────────────────────────────────────────────────
     local _infoStageFilter = "Current"
 
@@ -1648,21 +1646,65 @@ local function setupGUI()
             local inLobby = (game.PlaceId == LOBBY_PLACE_ID)
 
             -- Activity
-            local actText
+            local actLines = {}
             if NS.settings.autoGear and NS.gearFarmStage then
                 local fs = NS.gearFarmStage
-                actText = "Farming " .. fs.world .. " · " .. fs.mode .. " " .. fs.diff .. " Act " .. fs.act
-                    .. "\nFor: " .. (NS.settings.gearTargets and NS.settings.gearTargets[1] or "?")
+                local target = NS.settings.gearTargets and NS.settings.gearTargets[1]
+                table.insert(actLines, "Gear: farming " .. fs.world .. " Act " .. fs.act .. " (" .. fs.mode .. " " .. fs.diff .. ")")
+                if target then
+                    table.insert(actLines, "For: " .. target)
+                    local gData = NS.gearData and NS.gearData[target]
+                    if gData then
+                        local pd  = NS.lastPlayerData
+                        local inv = pd and pd.items or {}
+                        local st  = pd and pd.stats or {}
+                        local missing = computeMissing(gData.cost, inv, st)
+                        local parts = {}
+                        for mat, amt in pairs(missing) do table.insert(parts, mat .. " x" .. amt) end
+                        if #parts > 0 then
+                            table.sort(parts)
+                            table.insert(actLines, "Need: " .. table.concat(parts, " · "))
+                        end
+                    end
+                end
             elseif NS.settings.autoEvo and NS.evoFarmStage then
                 local fs = NS.evoFarmStage
-                actText = "Farming " .. fs.world .. " · " .. fs.mode .. " " .. fs.diff .. " Act " .. fs.act
-                    .. "\nFor: " .. (NS.settings.evoTargets and NS.settings.evoTargets[1] or "?")
+                local target = NS.settings.evoTargets and NS.settings.evoTargets[1]
+                table.insert(actLines, "Evo: farming " .. fs.world .. " Act " .. fs.act .. " (" .. fs.mode .. " " .. fs.diff .. ")")
+                if target then
+                    local awData = NS.data and NS.data.awaken and NS.data.awaken[target]
+                    table.insert(actLines, "For: " .. target .. (awData and (" → " .. (awData.awakensTo or "?")) or ""))
+                    if awData then
+                        local pd  = NS.lastPlayerData
+                        local inv = pd and pd.items or {}
+                        local st  = pd and pd.stats or {}
+                        local missing = computeMissing(awData.cost, inv, st)
+                        local parts = {}
+                        for mat, amt in pairs(missing) do table.insert(parts, mat .. " x" .. amt) end
+                        if #parts > 0 then
+                            table.sort(parts)
+                            table.insert(actLines, "Need: " .. table.concat(parts, " · "))
+                        end
+                    end
+                end
             elseif inLobby then
-                actText = "In Lobby"
+                if NS.settings.autoGear and not NS.gearFarmStage then
+                    table.insert(actLines, "Gear: waiting in lobby (nothing farmable)")
+                elseif NS.settings.autoEvo and not NS.evoFarmStage then
+                    table.insert(actLines, "Evo: waiting in lobby (nothing farmable)")
+                else
+                    table.insert(actLines, "In Lobby")
+                end
             else
-                actText = "In Stage"
+                local stageName = NS.currentStage and NS.currentStage.world or _data.stage
+                local act       = NS.currentStage and NS.currentStage.act   or _data.act
+                if stageName and act then
+                    table.insert(actLines, "In Stage: " .. stageName .. " Act " .. act)
+                else
+                    table.insert(actLines, "In Stage")
+                end
             end
-            pcall(function() lblActivity:Set({ Title = "", Content = actText }) end)
+            pcall(function() lblActivity:SetDesc(table.concat(actLines, "\n")) end)
 
             -- Evo
             local evoText
@@ -1691,7 +1733,7 @@ local function setupGUI()
                     evoText = table.concat(parts, "\n")
                 end
             end
-            pcall(function() lblEvo:Set({ Title = "", Content = evoText }) end)
+            pcall(function() lblEvo:SetDesc(evoText) end)
 
             -- Gear
             local gearText
@@ -1720,7 +1762,7 @@ local function setupGUI()
                     gearText = table.concat(parts, "\n")
                 end
             end
-            pcall(function() lblGear:Set({ Title = "", Content = gearText }) end)
+            pcall(function() lblGear:SetDesc(gearText) end)
 
             -- Player
             local playerText
@@ -1736,7 +1778,7 @@ local function setupGUI()
             else
                 playerText = "Loading…"
             end
-            pcall(function() lblPlayer:Set({ Title = "", Content = playerText }) end)
+            pcall(function() lblPlayer:SetDesc(playerText) end)
 
             -- Stage Records
             local stageText
@@ -1744,22 +1786,32 @@ local function setupGUI()
             if _infoStageFilter == "Current" then
                 if inLobby then
                     stageText = "In Lobby"
-                elseif NS.currentStage then
-                    local cs    = NS.currentStage
-                    local key   = cs.world .. "|" .. tostring(cs.act)
-                    local entry = allRecords[key]
-                    local header = cs.world .. " · " .. cs.mode .. " " .. cs.diff .. " Act " .. cs.act
-                    if entry then
-                        local cold = entry.count < 3 and "  (cold)" or ""
-                        stageText = header
-                            .. "\nBest " .. string.format("%d:%02d", math.floor(entry.best/60), entry.best%60)
-                            .. "  ·  Avg "  .. string.format("%d:%02d", math.floor(entry.avg/60),  entry.avg%60)
-                            .. "  ·  Runs " .. entry.count .. cold
-                    else
-                        stageText = header .. "\nNo records yet"
-                    end
                 else
-                    stageText = "No stage active"
+                    local cs = NS.currentStage
+                    local stageName = cs and cs.world or _data.stage
+                    local act       = cs and cs.act   or _data.act
+                    if stageName and act then
+                        local key   = stageName .. "|" .. tostring(act)
+                        local entry = allRecords[key]
+                        local header
+                        if cs then
+                            header = cs.world .. " · " .. cs.mode .. " " .. cs.diff .. " Act " .. cs.act
+                        else
+                            header = stageName .. " Act " .. act
+                        end
+                        if entry then
+                            local cold = entry.count < 3 and "  (cold)" or ""
+                            local best = entry.best or entry.avg
+                            stageText = header
+                                .. "\nBest " .. string.format("%d:%02d", math.floor(best/60), best%60)
+                                .. "  ·  Avg "  .. string.format("%d:%02d", math.floor(entry.avg/60), entry.avg%60)
+                                .. "  ·  Runs " .. entry.count .. cold
+                        else
+                            stageText = header .. "\nNo records yet"
+                        end
+                    else
+                        stageText = "No stage active"
+                    end
                 end
             else
                 if not next(allRecords) then
@@ -1769,7 +1821,8 @@ local function setupGUI()
                     for key, entry in pairs(allRecords) do
                         -- key format: "World Name|act"
                         local world, act = key:match("^(.+)|(%d+)$")
-                        local best = string.format("%d:%02d", math.floor(entry.best/60), entry.best%60)
+                        local b = entry.best or entry.avg
+                        local best = string.format("%d:%02d", math.floor(b/60), b%60)
                         local label = (world or key) .. " Act " .. (act or "?")
                         table.insert(lines, label .. "  —  Best " .. best .. " (" .. entry.count .. " runs)")
                     end
@@ -1777,7 +1830,7 @@ local function setupGUI()
                     stageText = table.concat(lines, "\n")
                 end
             end
-            pcall(function() lblStages:Set({ Title = "", Content = stageText }) end)
+            pcall(function() lblStages:SetDesc(stageText) end)
 
             task.wait(5)
         end
