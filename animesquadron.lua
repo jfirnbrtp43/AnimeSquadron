@@ -1620,16 +1620,16 @@ local function setupGUI()
     local _infoStageFilter = "Current"
 
     Tabs.Info:AddSection("Activity")
-    local lblActivity = Tabs.Info:AddLabel("—")
+    local lblActivity = Tabs.Info:AddParagraph({ Title = "", Content = "—" })
 
     Tabs.Info:AddSection("Evo Progress")
-    local lblEvo = Tabs.Info:AddLabel("Disabled")
+    local lblEvo = Tabs.Info:AddParagraph({ Title = "", Content = "Disabled" })
 
     Tabs.Info:AddSection("Gear Progress")
-    local lblGear = Tabs.Info:AddLabel("Disabled")
+    local lblGear = Tabs.Info:AddParagraph({ Title = "", Content = "Disabled" })
 
     Tabs.Info:AddSection("Player")
-    local lblPlayer = Tabs.Info:AddLabel("—")
+    local lblPlayer = Tabs.Info:AddParagraph({ Title = "", Content = "—" })
 
     Tabs.Info:AddSection("Stage Records")
     local stageFilterDd = Tabs.Info:AddDropdown("infoStageFilter", {
@@ -1639,7 +1639,7 @@ local function setupGUI()
         Multi  = false,
     })
     stageFilterDd:OnChanged(function(v) _infoStageFilter = v end)
-    local lblStages = Tabs.Info:AddLabel("—")
+    local lblStages = Tabs.Info:AddParagraph({ Title = "", Content = "—" })
 
     NS.infoGen = (NS.infoGen or 0) + 1
     local myInfoGen = NS.infoGen
@@ -1662,7 +1662,7 @@ local function setupGUI()
             else
                 actText = "In Stage"
             end
-            pcall(function() lblActivity:Set(actText) end)
+            pcall(function() lblActivity:Set({ Title = "", Content = actText }) end)
 
             -- Evo
             local evoText
@@ -1691,7 +1691,7 @@ local function setupGUI()
                     evoText = table.concat(parts, "\n")
                 end
             end
-            pcall(function() lblEvo:Set(evoText) end)
+            pcall(function() lblEvo:Set({ Title = "", Content = evoText }) end)
 
             -- Gear
             local gearText
@@ -1720,7 +1720,7 @@ local function setupGUI()
                     gearText = table.concat(parts, "\n")
                 end
             end
-            pcall(function() lblGear:Set(gearText) end)
+            pcall(function() lblGear:Set({ Title = "", Content = gearText }) end)
 
             -- Player
             local playerText
@@ -1736,7 +1736,7 @@ local function setupGUI()
             else
                 playerText = "Loading…"
             end
-            pcall(function() lblPlayer:Set(playerText) end)
+            pcall(function() lblPlayer:Set({ Title = "", Content = playerText }) end)
 
             -- Stage Records
             local stageText
@@ -1777,7 +1777,7 @@ local function setupGUI()
                     stageText = table.concat(lines, "\n")
                 end
             end
-            pcall(function() lblStages:Set(stageText) end)
+            pcall(function() lblStages:Set({ Title = "", Content = stageText }) end)
 
             task.wait(5)
         end
