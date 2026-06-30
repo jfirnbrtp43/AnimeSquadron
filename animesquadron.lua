@@ -1865,14 +1865,24 @@ game:GetService("Players").LocalPlayer.AncestryChanged:Connect(function(_, paren
     end
 end)
 
--- Anti-AFK: fires prevent_afk every 60s regardless of place
+-- Anti-AFK: 1px alternating mouse nudge resets Roblox's input timer (nets to zero drift),
+-- plus game remote for any game-level AFK system.
 NS.afkGen = (NS.afkGen or 0) + 1
 local _afkGen = NS.afkGen
 task.spawn(function()
-    local afkRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes",10)
-        :WaitForChild("Players",10):WaitForChild("prevent_afk",10)
+    local VIM = game:GetService("VirtualInputManager")
+    local afkRemote
+    pcall(function()
+        afkRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes",10)
+            :WaitForChild("Players",10):WaitForChild("prevent_afk",10)
+    end)
+    local _tick = 0
     while NS.afkGen == _afkGen do
-        pcall(function() afkRemote:FireServer() end)
+        _tick = _tick + 1
+        pcall(function()
+            VIM:SendMouseMoveEvent(_tick % 2 == 0 and 1 or -1, 0, workspace.CurrentCamera)
+        end)
+        if afkRemote then pcall(function() afkRemote:FireServer() end) end
         task.wait(60)
     end
 end)
