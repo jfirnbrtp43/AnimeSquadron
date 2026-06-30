@@ -1,0 +1,23 @@
+-- Auto-generated gear crafting data
+return {
+    ["Berserker Chestplate"] = {cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Black Sun Amber"]=10,Gold=5000}},
+    ["Berserker Helmet"]     = {cost={["King's Haki Residue"]=10,["Black Sun Amber"]=10,["Chakra Fragment"]=10,Gold=5000}},
+    ["Berserker Legs"]       = {cost={["Eclipse Godstone"]=10,["Black Sun Amber"]=10,["Chakra Fragment"]=10,Gold=5000}},
+    ["Devil Amulet"]         = {cost={["Fuin Script Paper"]=10,["Limitbreak Obsidian"]=15,["Beastblood Catalyst"]=25,Gold=2500}},
+    ["Devil Sword"]          = {cost={["Fuin Script Paper"]=25,["Limitbreak Obsidian"]=15,["Beastblood Catalyst"]=10,Gold=2500}},
+    ["Dragon Slayer"]        = {cost={["Eclipse Godstone"]=8,["Black Sun Amber"]=15,["Chakra Fragment"]=8,Gold=5000}},
+    ["Hogyoku"]              = {cost={["Fuin Script Paper"]=15,["Limitbreak Obsidian"]=25,["Beastblood Catalyst"]=10,Gold=2500}},
+    ["Monarch Daggers"]      = {cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Chakra Fragment"]=10,Gold=5000}},
+    ["Ninja Headband"]       = {cost={["Genjutsu Fog Vial"]=35,["Stormwake Sailcloth"]=50,["Stellar Ki Quartz"]=15,Gold=750}},
+    ["Ninja Hoodie"]         = {cost={["Genjutsu Fog Vial"]=50,["Stormwake Sailcloth"]=15,["Stellar Ki Quartz"]=35,Gold=750}},
+    ["Ninja Shoes"]          = {cost={["Genjutsu Fog Vial"]=15,["Stormwake Sailcloth"]=35,["Stellar Ki Quartz"]=50,Gold=750}},
+    ["Pirate Sandals"]       = {cost={["Depthglass Bottle"]=35,["Binding Cloth"]=15,["Ki Resonant Crystal"]=50,Gold=500}},
+    ["Pirate Shirt"]         = {cost={["Depthglass Bottle"]=15,["Binding Cloth"]=50,["Ki Resonant Crystal"]=35,Gold=500}},
+    ["Pirate Straw Hat"]     = {cost={["Depthglass Bottle"]=50,["Binding Cloth"]=35,["Ki Resonant Crystal"]=15,Gold=500}},
+    ["Puppeteer Coat"]       = {cost={["Fuin Script Paper"]=10,["Limitbreak Obsidian"]=15,["Beastblood Catalyst"]=25,Gold=2500}},
+    ["Puppeteer Hair"]       = {cost={["Fuin Script Paper"]=15,["Limitbreak Obsidian"]=25,["Beastblood Catalyst"]=10,Gold=2500}},
+    ["Puppeteer Pants"]      = {cost={["Fuin Script Paper"]=25,["Limitbreak Obsidian"]=10,["Beastblood Catalyst"]=15,Gold=2500}},
+    ["Saiyan Gi"]            = {cost={["Currentbinder Rope"]=50,["Zenkai Ore"]=35,["Shinobi Bone"]=15,Gold=250}},
+    ["Saiyan Hat"]           = {cost={["Currentbinder Rope"]=15,["Zenkai Ore"]=50,["Shinobi Bone"]=35,Gold=250}},
+    ["Saiyan Shoes"]         = {cost={["Currentbinder Rope"]=35,["Zenkai Ore"]=15,["Shinobi Bone"]=50,Gold=250}},
+}
