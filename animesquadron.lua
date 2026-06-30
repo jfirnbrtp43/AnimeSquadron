@@ -305,40 +305,102 @@ function ClearTime.get(stageName, act)
     return _data.clearTimes[stageKey(stageName, act)]
 end
 
--- ── Static data (awaken costs + mat drop locations) ─────────────
-local DATA_FILE = "animesquadron_data.lua"
-if not NS.data or NS.rebuildData then
-    local raw = isfile(DATA_FILE) and readfile(DATA_FILE)
-    if raw then
-        local ok, result = pcall(loadstring(raw))
-        if ok and type(result) == "table" then
-            NS.data = result
-            log("Data loaded from file")
-        else
-            log("Data file parse error — clear NS.data and re-run")
-        end
-    else
-        log("Data file not found — place animesquadron_data.lua in autoexec folder")
-    end
-    NS.rebuildData = false
-end
+-- ── Static data ───────────────────────────────────────────────────
+NS.data = {
+    awaken = {
+        ["Shinks"]                 = { awakensTo="Shinks (Emperor)",              cost={["Pelli"]=100,["Beastblood Catalyst"]=20,["King's Haki Residue"]=3,["Stormwake Sailcloth"]=40,["Meat"]=200,["Gryphon"]=1} },
+        ["Big Beard"]              = { awakensTo="Big Beard (Father)",            cost={["Pelli"]=100,["Beastblood Catalyst"]=10,["Depthglass Bottle"]=50,["Bisento"]=1,["Meat"]=200,["Stormwake Sailcloth"]=100} },
+        ["Vegata (SSJ4)"]          = { awakensTo="Vegata (SSJ4 Full Power)",      cost={["Stellar Ki Quartz"]=50,["Limitbreak Obsidian"]=30,["Zeni"]=100,["Scouter"]=1,["Ki Resonant Crystal"]=70,["Senzu"]=200} },
+        ["Rizzuto"]                = { awakensTo="Rizzuto (Sage)",                cost={["Shuriken"]=1,["Narutomaki"]=200,["Genjutsu Fog Vial"]=30,["Headband"]=100,["Binding Cloth"]=50,["Shinobi Bone"]=100} },
+        ["Woo"]                    = { awakensTo="Woo (Shadow)",                  cost={["Eclipse Godstone"]=5,["Pelli"]=100,["Chakra Fragment"]=5,["King's Haki Residue"]=5,["Monarch Daggers"]=1,["Zeni"]=100,["Headband"]=100} },
+        ["Super Beby 2"]           = { awakensTo="Big Beard (Father)",            cost={["Beastblood Catalyst"]=5,["Depthglass Bottle"]=25,["Bisento"]=1,["Meat"]=100,["Stormwake Sailcloth"]=50} },
+        ["Madora"]                 = { awakensTo="Madora (Gunbai)",               cost={["Gunbai"]=1,["Narutomaki"]=200,["Genjutsu Fog Vial"]=50,["Headband"]=200,["Chakra Fragment"]=6,["Fuin Script Paper"]=30} },
+        ["Karashi"]                = { awakensTo="Karashi (Sharingan)",           cost={["Chakra Fragment"]=3,["Karashi's Book"]=1,["Fuin Script Paper"]=20,["Headband"]=100,["Shinobi Bone"]=100,["Narutomaki"]=200} },
+        ["Goki (SSJ4 Full Power)"] = { awakensTo="Gometa (SSJ4)",                cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Chakra Fragment"]=10,["Zeni"]=200,["Primal Core"]=1} },
+        ["Goki (SSJ4)"]            = { awakensTo="Goki (SSJ4 Full Power)",        cost={["Eclipse Godstone"]=3,["Zenkai Ore"]=100,["Limitbreak Obsidian"]=20,["Zeni"]=100,["Power Pole"]=1,["Senzu"]=200} },
+        ["Shanron"]                = { awakensTo="Shanron (Omega)",               cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Chakra Fragment"]=10,["Dragonballs"]=1,["Zeni"]=200} },
+        ["Puppeteer"]              = { awakensTo="Puppeteer (Transcendent)",      cost={["Eclipse Godstone"]=10,["Pelli"]=100,["Chakra Fragment"]=10,["King's Haki Residue"]=10,["Headband"]=100,["Hogyoku Orb"]=1,["Zeni"]=100} },
+        ["Berserker"]              = { awakensTo="Berserker (Enraged)",           cost={["Moonlit Silver"]=30,["Dragon Slayer (Evo)"]=1,["Black Sun Amber"]=15,["Apostle Iron"]=100,["Eclipse Stone"]=75,["Brand Ash"]=50,["Behelit"]=200,["White Behelit"]=50} },
+        ["Caska"]                  = { awakensTo="Caska (Resiliance)",            cost={["Moonlit Silver"]=20,["Behelit"]=100,["Black Sun Amber"]=5,["Apostle Iron"]=75,["Eclipse Stone"]=50,["Brand Ash"]=30,["Caskas Sword"]=1,["White Behelit"]=25} },
+        ["Skeleton Knight"]        = { awakensTo="Skeleton Knight (Resonance)",   cost={["Sword Of Resonance"]=1,["Behelit"]=200,["Black Sun Amber"]=15,["Apostle Iron"]=100,["Eclipse Stone"]=75,["Brand Ash"]=50,["Moonlit Silver"]=30,["White Behelit"]=25} },
+        ["Falcon"]                 = { awakensTo="Falcon (Dark)",                 cost={["Moonlit Silver"]=30,["Behelit"]=200,["Black Sun Amber"]=15,["Cavalry Saber"]=1,["Apostle Iron"]=100,["Eclipse Stone"]=75,["Brand Ash"]=50,["White Behelit"]=50} },
+        ["Baras"]                  = { awakensTo="Baras (Meteoric Burst)",        cost={["Black Sun Amber"]=10,["Pelli"]=100,["Chakra Fragment"]=10,["King's Haki Residue"]=10,["Headband"]=100,["Behelit"]=100,["Baras Eye"]=1} },
+        ["Garu"]                   = { awakensTo="Garu (Half Monster)",           cost={["Black Sun Amber"]=10,["Pelli"]=100,["Chakra Fragment"]=10,["King's Haki Residue"]=10,["Headband"]=100,["Behelit"]=100,["Hunters Cloth"]=1} },
+    },
+    unknownSource = {
+        "Monarch Daggers", "Primal Core", "Hogyoku Orb", "Baras Eye", "Hunters Cloth", "Gold",
+    },
+    matmap = {
+        ["Apostle Iron"]        = { {world="Eclipse (Before)",mode="Story",diff="Normal",act=1,amount="2-4x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Normal",act=2,amount="2-4x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=1,amount="4-8x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=2,amount="4-8x",chance="100%"} },
+        ["Zenkai Ore"]          = { {world="GT City",mode="Story",diff="Normal",act=1,amount="2-4x",chance="100%"},{world="GT City",mode="Story",diff="Normal",act=2,amount="2-4x",chance="100%"},{world="GT City",mode="Story",diff="Hard",act=1,amount="4-8x",chance="100%"},{world="GT City",mode="Story",diff="Hard",act=2,amount="4-8x",chance="100%"} },
+        ["Ki Resonant Crystal"] = { {world="GT City",mode="Story",diff="Normal",act=3,amount="1-2x",chance="100%"},{world="GT City",mode="Story",diff="Normal",act=4,amount="1-2x",chance="100%"},{world="GT City",mode="Story",diff="Hard",act=3,amount="2-4x",chance="100%"},{world="GT City",mode="Story",diff="Hard",act=4,amount="2-4x",chance="100%"} },
+        ["Stellar Ki Quartz"]   = { {world="GT City",mode="Story",diff="Normal",act=5,amount="1x",chance="100%"},{world="GT City",mode="Story",diff="Normal",act=6,amount="1x",chance="100%"},{world="GT City",mode="Story",diff="Hard",act=5,amount="2x",chance="100%"},{world="GT City",mode="Story",diff="Hard",act=6,amount="2x",chance="100%"} },
+        ["Limitbreak Obsidian"] = { {world="GT City",mode="Story",diff="Normal",act=7,amount="1x",chance="30%"},{world="GT City",mode="Story",diff="Normal",act=8,amount="1x",chance="30%"},{world="GT City",mode="Story",diff="Hard",act=7,amount="1x",chance="60%"},{world="GT City",mode="Story",diff="Hard",act=8,amount="1x",chance="60%"} },
+        ["Eclipse Godstone"]    = { {world="GT City",mode="Story",diff="Normal",act=9,amount="1x",chance="3%",pity=30},{world="GT City",mode="Story",diff="Normal",act=10,amount="1x",chance="3%",pity=30},{world="GT City",mode="Story",diff="Hard",act=9,amount="1x",chance="6%",pity=15},{world="GT City",mode="Story",diff="Hard",act=10,amount="1x",chance="6%",pity=15} },
+        ["Currentbinder Rope"]  = { {world="Marine Lobby",mode="Story",diff="Normal",act=1,amount="2-4x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Normal",act=2,amount="2-4x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Hard",act=1,amount="4-8x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Hard",act=2,amount="4-8x",chance="100%"} },
+        ["Depthglass Bottle"]   = { {world="Marine Lobby",mode="Story",diff="Normal",act=3,amount="1-2x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Normal",act=4,amount="1-2x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Hard",act=3,amount="2-4x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Hard",act=4,amount="2-4x",chance="100%"} },
+        ["Stormwake Sailcloth"] = { {world="Marine Lobby",mode="Story",diff="Normal",act=5,amount="1x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Normal",act=6,amount="1x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Hard",act=5,amount="2x",chance="100%"},{world="Marine Lobby",mode="Story",diff="Hard",act=6,amount="2x",chance="100%"} },
+        ["Beastblood Catalyst"] = { {world="Marine Lobby",mode="Story",diff="Normal",act=7,amount="1x",chance="30%"},{world="Marine Lobby",mode="Story",diff="Normal",act=8,amount="1x",chance="30%"},{world="Marine Lobby",mode="Story",diff="Hard",act=7,amount="1x",chance="60%"},{world="Marine Lobby",mode="Story",diff="Hard",act=8,amount="1x",chance="60%"} },
+        ["King's Haki Residue"] = { {world="Marine Lobby",mode="Story",diff="Normal",act=9,amount="1x",chance="3%",pity=30},{world="Marine Lobby",mode="Story",diff="Normal",act=10,amount="1x",chance="3%",pity=30},{world="Marine Lobby",mode="Story",diff="Hard",act=9,amount="1x",chance="6%",pity=15},{world="Marine Lobby",mode="Story",diff="Hard",act=10,amount="1x",chance="6%",pity=15} },
+        ["Shinobi Bone"]        = { {world="Ninja Village",mode="Story",diff="Normal",act=1,amount="2-4x",chance="100%"},{world="Ninja Village",mode="Story",diff="Normal",act=2,amount="2-4x",chance="100%"},{world="Ninja Village",mode="Story",diff="Hard",act=1,amount="4-8x",chance="100%"},{world="Ninja Village",mode="Story",diff="Hard",act=2,amount="4-8x",chance="100%"} },
+        ["Binding Cloth"]       = { {world="Ninja Village",mode="Story",diff="Normal",act=3,amount="1-2x",chance="100%"},{world="Ninja Village",mode="Story",diff="Normal",act=4,amount="1-2x",chance="100%"},{world="Ninja Village",mode="Story",diff="Hard",act=3,amount="2-4x",chance="100%"},{world="Ninja Village",mode="Story",diff="Hard",act=4,amount="2-4x",chance="100%"} },
+        ["Genjutsu Fog Vial"]   = { {world="Ninja Village",mode="Story",diff="Normal",act=5,amount="1x",chance="100%"},{world="Ninja Village",mode="Story",diff="Normal",act=6,amount="1x",chance="100%"},{world="Ninja Village",mode="Story",diff="Hard",act=5,amount="2x",chance="100%"},{world="Ninja Village",mode="Story",diff="Hard",act=6,amount="2x",chance="100%"} },
+        ["Fuin Script Paper"]   = { {world="Ninja Village",mode="Story",diff="Normal",act=7,amount="1x",chance="30%"},{world="Ninja Village",mode="Story",diff="Normal",act=8,amount="1x",chance="30%"},{world="Ninja Village",mode="Story",diff="Hard",act=7,amount="1x",chance="60%"},{world="Ninja Village",mode="Story",diff="Hard",act=8,amount="1x",chance="60%"} },
+        ["Chakra Fragment"]     = { {world="Ninja Village",mode="Story",diff="Normal",act=9,amount="1x",chance="3%",pity=30},{world="Ninja Village",mode="Story",diff="Normal",act=10,amount="1x",chance="3%",pity=30},{world="Ninja Village",mode="Story",diff="Hard",act=9,amount="1x",chance="6%",pity=15},{world="Ninja Village",mode="Story",diff="Hard",act=10,amount="1x",chance="6%",pity=15} },
+        ["Brand Ash"]           = { {world="Eclipse (Before)",mode="Story",diff="Normal",act=5,amount="1x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Normal",act=6,amount="1x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=5,amount="2x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=6,amount="2x",chance="100%"} },
+        ["Moonlit Silver"]      = { {world="Eclipse (Before)",mode="Story",diff="Normal",act=7,amount="1x",chance="30%"},{world="Eclipse (Before)",mode="Story",diff="Normal",act=8,amount="1x",chance="30%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=7,amount="1x",chance="60%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=8,amount="1x",chance="60%"} },
+        ["Black Sun Amber"]     = { {world="Eclipse (Before)",mode="Story",diff="Normal",act=9,amount="1x",chance="3%",pity=30},{world="Eclipse (Before)",mode="Story",diff="Normal",act=10,amount="1x",chance="3%",pity=30},{world="Eclipse (Before)",mode="Story",diff="Hard",act=9,amount="1x",chance="6%",pity=15},{world="Eclipse (Before)",mode="Story",diff="Hard",act=10,amount="1x",chance="6%",pity=15} },
+        ["Zeni"]                = { {world="GT City",mode="Squadron",diff="Normal",act=1,amount="1-2x",chance="50%"},{world="GT City",mode="Squadron",diff="Hard",act=1,amount="1-2x",chance="100%"} },
+        ["Scouter"]             = { {world="GT City",mode="Squadron",diff="Normal",act=2,amount="1x",chance="2.5%",pity=50},{world="GT City",mode="Squadron",diff="Hard",act=2,amount="1x",chance="5%",pity=30} },
+        ["Power Pole"]          = { {world="GT City",mode="Squadron",diff="Normal",act=3,amount="1x",chance="2.5%",pity=50},{world="GT City",mode="Squadron",diff="Hard",act=3,amount="1x",chance="5%",pity=30} },
+        ["Pelli"]               = { {world="Marine Lobby",mode="Squadron",diff="Normal",act=1,amount="1-2x",chance="50%"},{world="Marine Lobby",mode="Squadron",diff="Hard",act=1,amount="1-2x",chance="100%"} },
+        ["Bisento"]             = { {world="Marine Lobby",mode="Squadron",diff="Normal",act=2,amount="1x",chance="2.5%",pity=50},{world="Marine Lobby",mode="Squadron",diff="Hard",act=2,amount="1x",chance="5%",pity=30} },
+        ["Gryphon"]             = { {world="Marine Lobby",mode="Squadron",diff="Normal",act=3,amount="1x",chance="2.5%",pity=50},{world="Marine Lobby",mode="Squadron",diff="Hard",act=3,amount="1x",chance="5%",pity=30} },
+        ["Headband"]            = { {world="Ninja Village",mode="Squadron",diff="Normal",act=1,amount="1-2x",chance="50%"},{world="Ninja Village",mode="Squadron",diff="Hard",act=1,amount="1-2x",chance="100%"} },
+        ["Karashi's Book"]      = { {world="Ninja Village",mode="Squadron",diff="Normal",act=2,amount="1x",chance="2.5%",pity=50},{world="Ninja Village",mode="Squadron",diff="Hard",act=2,amount="1x",chance="5%",pity=30} },
+        ["Shuriken"]            = { {world="Ninja Village",mode="Squadron",diff="Normal",act=3,amount="1x",chance="2.5%",pity=50},{world="Ninja Village",mode="Squadron",diff="Hard",act=3,amount="1x",chance="5%",pity=30} },
+        ["Gunbai"]              = { {world="Ninja Village",mode="Squadron",diff="Normal",act=4,amount="1x",chance="0.5%",pity=200},{world="Ninja Village",mode="Squadron",diff="Hard",act=4,amount="1x",chance="2%",pity=100} },
+        ["Madora"]              = { {world="Ninja Village",mode="Squadron",diff="Normal",act=4,amount="1x",chance="0.25%",pity=300},{world="Ninja Village",mode="Squadron",diff="Hard",act=4,amount="1x",chance="0.5%",pity=200} },
+        ["Caskas Sword"]        = { {world="Eclipse (Before)",mode="Squadron",diff="Normal",act=2,amount="1x",chance="2.5%",pity=50},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=2,amount="1x",chance="5%",pity=30} },
+        ["Cavalry Saber"]       = { {world="Eclipse (Before)",mode="Squadron",diff="Normal",act=3,amount="1x",chance="2.5%",pity=50},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=3,amount="1x",chance="5%",pity=30} },
+        ["Dragon Slayer (Evo)"] = { {world="Eclipse (Before)",mode="Squadron",diff="Hard",act=4,amount="1x",chance="2%",pity=100} },
+        ["Berserker"]           = { {world="Eclipse (Before)",mode="Squadron",diff="Normal",act=4,amount="1x",chance="0.25%",pity=300},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=4,amount="1x",chance="0.5%",pity=200} },
+        ["Behelit"]             = { {world="Eclipse (Before)",mode="Squadron",diff="Normal",act=1,amount="1-2x",chance="50%"},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=1,amount="1-2x",chance="100%"} },
+        ["Dragonballs"]         = { {world="GT City",mode="Raid",diff="Normal",act=4,amount="1x",chance="0.5%",pity=200},{world="GT City",mode="Raid",diff="Hard",act=4,amount="1x",chance="1%",pity=100} },
+        ["Shanron"]             = { {world="GT City",mode="Raid",diff="Normal",act=4,amount="1x",chance="0.25%",pity=400},{world="GT City",mode="Raid",diff="Hard",act=4,amount="1x",chance="0.5%",pity=200} },
+        ["White Behelit"]       = { {world="Eclipse (Before)",mode="Raid",diff="Normal",act=1,amount="1-2x",chance="50%"},{world="Eclipse (Before)",mode="Raid",diff="Normal",act=2,amount="1-2x",chance="50%"},{world="Eclipse (Before)",mode="Raid",diff="Normal",act=3,amount="1-2x",chance="50%"},{world="Eclipse (Before)",mode="Raid",diff="Normal",act=4,amount="1-2x",chance="50%"},{world="Eclipse (Before)",mode="Raid",diff="Hard",act=1,amount="1-2x",chance="100%"},{world="Eclipse (Before)",mode="Raid",diff="Hard",act=2,amount="1-2x",chance="100%"},{world="Eclipse (Before)",mode="Raid",diff="Hard",act=3,amount="1-2x",chance="100%"},{world="Eclipse (Before)",mode="Raid",diff="Hard",act=4,amount="1-2x",chance="100%"} },
+        ["Sword Of Resonance"]  = { {world="Eclipse (Before)",mode="Raid",diff="Normal",act=4,amount="1x",chance="0.5%",pity=200},{world="Eclipse (Before)",mode="Raid",diff="Hard",act=4,amount="1x",chance="1%",pity=100} },
+        ["Skeleton Knight"]     = { {world="Eclipse (Before)",mode="Raid",diff="Normal",act=4,amount="1x",chance="0.25%",pity=400},{world="Eclipse (Before)",mode="Raid",diff="Hard",act=4,amount="1x",chance="0.5%",pity=200} },
+        ["Narutomaki"]          = { {world="Ninja Village",mode="Squadron",diff="Normal",act=1,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Normal",act=2,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Normal",act=3,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Normal",act=4,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Hard",act=1,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Hard",act=2,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Hard",act=3,amount="4-6x",chance="100%"},{world="Ninja Village",mode="Squadron",diff="Hard",act=4,amount="4-6x",chance="100%"} },
+        ["Meat"]                = { {world="Marine Lobby",mode="Squadron",diff="Normal",act=1,amount="4-6x",chance="100%"},{world="Marine Lobby",mode="Squadron",diff="Normal",act=2,amount="4-6x",chance="100%"},{world="Marine Lobby",mode="Squadron",diff="Normal",act=3,amount="4-6x",chance="100%"},{world="Marine Lobby",mode="Squadron",diff="Hard",act=1,amount="4-6x",chance="100%"},{world="Marine Lobby",mode="Squadron",diff="Hard",act=2,amount="4-6x",chance="100%"},{world="Marine Lobby",mode="Squadron",diff="Hard",act=3,amount="4-6x",chance="100%"} },
+        ["Senzu"]               = { {world="GT City",mode="Squadron",diff="Normal",act=1,amount="4-6x",chance="100%"},{world="GT City",mode="Squadron",diff="Normal",act=2,amount="4-6x",chance="100%"},{world="GT City",mode="Squadron",diff="Normal",act=3,amount="4-6x",chance="100%"},{world="GT City",mode="Squadron",diff="Hard",act=1,amount="4-6x",chance="100%"},{world="GT City",mode="Squadron",diff="Hard",act=2,amount="4-6x",chance="100%"},{world="GT City",mode="Squadron",diff="Hard",act=3,amount="4-6x",chance="100%"} },
+        ["Brand of Sacrifice"]  = { {world="Eclipse (Before)",mode="Squadron",diff="Normal",act=1,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Normal",act=2,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Normal",act=3,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Normal",act=4,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=1,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=2,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=3,amount="4-6x",chance="100%"},{world="Eclipse (Before)",mode="Squadron",diff="Hard",act=4,amount="4-6x",chance="100%"} },
+        ["Eclipse Stone"]       = { {world="Eclipse (Before)",mode="Story",diff="Normal",act=3,amount="1-2x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Normal",act=4,amount="1-2x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=3,amount="2-4x",chance="100%"},{world="Eclipse (Before)",mode="Story",diff="Hard",act=4,amount="2-4x",chance="100%"} },
+    },
+}
 
--- ── Gear data ────────────────────────────────────────────────────
-local GEAR_FILE = "animesquadron_gear.lua"
-if not NS.gearData then
-    local raw = isfile(GEAR_FILE) and readfile(GEAR_FILE)
-    if raw then
-        local ok, result = pcall(loadstring(raw))
-        if ok and type(result) == "table" then
-            NS.gearData = result
-            log("Gear data loaded")
-        else
-            log("Gear data parse error")
-        end
-    else
-        log("Gear data not found — place animesquadron_gear.lua in autoexec folder")
-    end
-end
+NS.gearData = {
+    ["Berserker Chestplate"] = { cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Black Sun Amber"]=10,Gold=5000} },
+    ["Berserker Helmet"]     = { cost={["King's Haki Residue"]=10,["Black Sun Amber"]=10,["Chakra Fragment"]=10,Gold=5000} },
+    ["Berserker Legs"]       = { cost={["Eclipse Godstone"]=10,["Black Sun Amber"]=10,["Chakra Fragment"]=10,Gold=5000} },
+    ["Devil Amulet"]         = { cost={["Fuin Script Paper"]=10,["Limitbreak Obsidian"]=15,["Beastblood Catalyst"]=25,Gold=2500} },
+    ["Devil Sword"]          = { cost={["Fuin Script Paper"]=25,["Limitbreak Obsidian"]=15,["Beastblood Catalyst"]=10,Gold=2500} },
+    ["Dragon Slayer"]        = { cost={["Eclipse Godstone"]=8,["Black Sun Amber"]=15,["Chakra Fragment"]=8,Gold=5000} },
+    ["Hogyoku"]              = { cost={["Fuin Script Paper"]=15,["Limitbreak Obsidian"]=25,["Beastblood Catalyst"]=10,Gold=2500} },
+    ["Monarch Daggers"]      = { cost={["Eclipse Godstone"]=10,["King's Haki Residue"]=10,["Chakra Fragment"]=10,Gold=5000} },
+    ["Ninja Headband"]       = { cost={["Genjutsu Fog Vial"]=35,["Stormwake Sailcloth"]=50,["Stellar Ki Quartz"]=15,Gold=750} },
+    ["Ninja Hoodie"]         = { cost={["Genjutsu Fog Vial"]=50,["Stormwake Sailcloth"]=15,["Stellar Ki Quartz"]=35,Gold=750} },
+    ["Ninja Shoes"]          = { cost={["Genjutsu Fog Vial"]=15,["Stormwake Sailcloth"]=35,["Stellar Ki Quartz"]=50,Gold=750} },
+    ["Pirate Sandals"]       = { cost={["Depthglass Bottle"]=35,["Binding Cloth"]=15,["Ki Resonant Crystal"]=50,Gold=500} },
+    ["Pirate Shirt"]         = { cost={["Depthglass Bottle"]=15,["Binding Cloth"]=50,["Ki Resonant Crystal"]=35,Gold=500} },
+    ["Pirate Straw Hat"]     = { cost={["Depthglass Bottle"]=50,["Binding Cloth"]=35,["Ki Resonant Crystal"]=15,Gold=500} },
+    ["Puppeteer Coat"]       = { cost={["Fuin Script Paper"]=10,["Limitbreak Obsidian"]=15,["Beastblood Catalyst"]=25,Gold=2500} },
+    ["Puppeteer Hair"]       = { cost={["Fuin Script Paper"]=15,["Limitbreak Obsidian"]=25,["Beastblood Catalyst"]=10,Gold=2500} },
+    ["Puppeteer Pants"]      = { cost={["Fuin Script Paper"]=25,["Limitbreak Obsidian"]=10,["Beastblood Catalyst"]=15,Gold=2500} },
+    ["Saiyan Gi"]            = { cost={["Currentbinder Rope"]=50,["Zenkai Ore"]=35,["Shinobi Bone"]=15,Gold=250} },
+    ["Saiyan Hat"]           = { cost={["Currentbinder Rope"]=15,["Zenkai Ore"]=50,["Shinobi Bone"]=35,Gold=250} },
+    ["Saiyan Shoes"]         = { cost={["Currentbinder Rope"]=35,["Zenkai Ore"]=15,["Shinobi Bone"]=50,Gold=250} },
+}
 
 -- ── Remotes ──────────────────────────────────────────────────────
 local function getRemotes()
@@ -1005,8 +1067,11 @@ local function setupLobby()
         end)
 
         task.spawn(function()
-            task.wait(3)  -- let runLobbyActions + orchestrator finish before joining
+            task.wait(3)  -- let runLobbyActions finish before first join attempt
             while NS.autoJoinGen == myGen do
+                -- Re-run orchestrators every loop so enabling toggles mid-session works
+                runEvoOrchestrator(lobbyRemotes)
+                runGearOrchestrator(lobbyRemotes)
                 if NS.settings.autoEvo and NS.evoFarmStage then
                     local fs = NS.evoFarmStage
                     if tryJoinMode(lobbyRemotes, { mode=fs.mode, world=fs.world, act=fs.act, difficulty=fs.diff }) then break end
