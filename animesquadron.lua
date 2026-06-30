@@ -61,6 +61,8 @@ local _defaults = {
     autoGear          = false,
     autoCraft         = false,
     gearTargets       = {},    -- gear piece names to farm materials for
+    autoPermanent     = false,
+    permanentDiff     = "Normal",
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
     webhookOnVictory  = false,
@@ -836,33 +838,40 @@ local function tryJoinMode(lobbyRemotes, cfg)
     elseif cfg.mode == "Infinite" then
         config = { world="Katakara Wasteland", act=1, mode="Infinite", difficulty="Hard", boosted=cfg.boosted or false }
     elseif cfg.mode == "Permanent" then
-        -- Auto-detect which permanent challenge still has daily Trait Shard cap remaining
-        local ok0, pdata = pcall(function() return lobbyRemotes.playerGet:InvokeServer() end)
-        if not ok0 or not pdata then
-            log("Auto Join: failed to fetch player data for permanent cap check")
-            return false
-        end
-        local pcaps = pdata.caps or {}
-        local chosen, chosenCap = nil, 0
-        for _, pc in ipairs(PERMANENT_CHALLENGES) do
-            local key = permCapKey(pc.world)
-            local current = pcaps[key] or 0
-            if current < pc.cap then
-                chosen    = pc.world
-                chosenCap = pc.cap
-                log("Auto Join: Permanent → " .. pc.world .. " (" .. current .. "/" .. pc.cap .. " Trait Shards today)")
-                break
-            else
-                log("Auto Join: Permanent → " .. pc.world .. " cap full (" .. current .. "/" .. pc.cap .. ")")
+        if NS.settings.autoPermanent then
+            -- Adv Farm mode: auto-detect which stage still has daily Trait Shard cap remaining
+            local ok0, pdata = pcall(function() return lobbyRemotes.playerGet:InvokeServer() end)
+            if not ok0 or not pdata then
+                log("Auto Join: failed to fetch player data for permanent cap check")
+                return false
             end
+            local pcaps = pdata.caps or {}
+            local chosen, chosenCap = nil, 0
+            for _, pc in ipairs(PERMANENT_CHALLENGES) do
+                local key = permCapKey(pc.world)
+                local current = pcaps[key] or 0
+                if current < pc.cap then
+                    chosen    = pc.world
+                    chosenCap = pc.cap
+                    log("Auto Join: Permanent → " .. pc.world .. " (" .. current .. "/" .. pc.cap .. " Trait Shards today)")
+                    break
+                else
+                    log("Auto Join: Permanent → " .. pc.world .. " cap full (" .. current .. "/" .. pc.cap .. ")")
+                end
+            end
+            if not chosen then
+                log("Auto Join: Permanent → all daily caps full")
+                return false
+            end
+            NS.permCapKey = permCapKey(chosen)
+            NS.permCapMax = chosenCap
+            config = { world=chosen, act=1, mode="Challenge", difficulty=NS.settings.permanentDiff or "Normal", boosted=true, only_friends=false }
+        else
+            -- Normal mode: just join the configured world
+            NS.permCapKey = nil
+            NS.permCapMax = nil
+            config = { world=cfg.world, act=cfg.act or 1, mode="Challenge", difficulty=cfg.difficulty or "Normal", boosted=true, only_friends=false }
         end
-        if not chosen then
-            log("Auto Join: Permanent → all daily caps full")
-            return false
-        end
-        NS.permCapKey = permCapKey(chosen)
-        NS.permCapMax = chosenCap
-        config = { world=chosen, act=cfg.act or 1, mode="Challenge", difficulty=cfg.difficulty or "Normal", boosted=true, only_friends=false }
     else
         -- Story, Squadron, Raid
         config = { world=cfg.world, act=cfg.act, mode=cfg.mode, difficulty=cfg.difficulty or "Normal" }
@@ -1123,6 +1132,22 @@ local function runEvoOrchestrator(lr)
     end
 end
 
+local function updatePermStatus(lr)
+    if not NS.lblPermStatus then return end
+    local ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+    if not ok or not pdata then
+        NS.lblPermStatus:SetText("Status: failed to fetch")
+        return
+    end
+    local pcaps = pdata.caps or {}
+    local parts = {}
+    for _, pc in ipairs(PERMANENT_CHALLENGES) do
+        local current = pcaps[permCapKey(pc.world)] or 0
+        table.insert(parts, pc.world .. ": " .. current .. "/" .. pc.cap)
+    end
+    NS.lblPermStatus:SetText(table.concat(parts, "  |  "))
+end
+
 local function runLobbyActions(lr)
     runEvoOrchestrator(lr)
     runGearOrchestrator(lr)  -- run first so farm stages are set before autoJoin loop starts
@@ -1131,6 +1156,7 @@ local function runLobbyActions(lr)
     runAutoSell(lr)
     if NS.settings.autoRaidShop  then runShopBuy(lr, "gt_city_raid", NS.settings.raidShopBuy)  end
     if NS.settings.autoMerchant  then runShopBuy(lr, "merchant",     NS.settings.merchantBuy)   end
+    task.spawn(function() updatePermStatus(lr) end)
 end
 
 -- ── Lobby setup ──────────────────────────────────────────────────
@@ -1369,6 +1395,22 @@ local function setupGUI()
             State.saveSettings()
         end,
     })
+
+    -- ── Permanent Challenges ──────────────────────────────────────
+    local PermBox = Tabs.AdvFarm:AddRightGroupbox("Permanent Challenges")
+    addToggle(PermBox, "autoPermanent", "Auto Permanent",
+        "Auto-farm permanent challenges (Hero Hunter → Katakara Bridge) until daily Trait Shard caps are full")
+    PermBox:AddDropdown("permanentDiff", {
+        Values   = { "Normal", "Hard" },
+        Default  = NS.settings.permanentDiff or "Normal",
+        Multi    = false,
+        Text     = "Difficulty",
+        Callback = function(Value)
+            NS.settings.permanentDiff = Value
+            State.saveSettings()
+        end,
+    })
+    NS.lblPermStatus = PermBox:AddLabel("Status: —", true)
 
     -- ── Upgrade ───────────────────────────────────────────────────
     local UpgradeBox = Tabs.Play:AddLeftGroupbox("Auto Upgrade")
