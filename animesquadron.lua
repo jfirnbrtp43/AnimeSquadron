@@ -1390,6 +1390,28 @@ log("Loading | PlaceId: " .. game.PlaceId)
 State.load()
 State.set("lastPlaceId", game.PlaceId)
 
+-- Auto-reconnect: teleports back when kicked or server shuts down
+game:GetService("Players").LocalPlayer.AncestryChanged:Connect(function(_, parent)
+    if parent == nil then
+        task.wait(5)
+        pcall(function()
+            game:GetService("TeleportService"):Teleport(game.PlaceId)
+        end)
+    end
+end)
+
+-- Anti-AFK: fires prevent_afk every 60s regardless of place
+NS.afkGen = (NS.afkGen or 0) + 1
+local _afkGen = NS.afkGen
+task.spawn(function()
+    local afkRemote = game:GetService("ReplicatedStorage"):WaitForChild("Remotes",10)
+        :WaitForChild("Players",10):WaitForChild("prevent_afk",10)
+    while NS.afkGen == _afkGen do
+        pcall(function() afkRemote:FireServer() end)
+        task.wait(60)
+    end
+end)
+
 task.spawn(setupGUI)
 
 if game.PlaceId == LOBBY_PLACE_ID then
