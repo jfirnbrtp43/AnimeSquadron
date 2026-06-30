@@ -58,6 +58,8 @@ local _defaults = {
     merchantBuy       = {},      -- { ["Item Name"] = maxAmount }
     autoEvo           = false,
     evoTargets        = {},    -- unit names to awaken in priority order: {"Goki (SSJ4)", "Caska"}
+    autoGear          = false,
+    gearTargets       = {},    -- gear piece names to farm materials for
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
     webhookOnVictory  = false,
@@ -321,6 +323,23 @@ if not NS.data or NS.rebuildData then
     NS.rebuildData = false
 end
 
+-- ── Gear data ────────────────────────────────────────────────────
+local GEAR_FILE = "animesquadron_gear.lua"
+if not NS.gearData then
+    local raw = isfile(GEAR_FILE) and readfile(GEAR_FILE)
+    if raw then
+        local ok, result = pcall(loadstring(raw))
+        if ok and type(result) == "table" then
+            NS.gearData = result
+            log("Gear data loaded")
+        else
+            log("Gear data parse error")
+        end
+    else
+        log("Gear data not found — place animesquadron_gear.lua in autoexec folder")
+    end
+end
+
 -- ── Remotes ──────────────────────────────────────────────────────
 local function getRemotes()
     local rem   = RS:WaitForChild("Remotes",    10)
@@ -516,6 +535,60 @@ local function setupEndScreenHook(player, remotes)
                 end
             elseif not pd then
                 log("Evo: inventory check failed")
+            end
+        end
+
+        -- Gear check (same logic as evo)
+        if resultText == "Victory!"
+            and NS.settings.autoGear
+            and NS.settings.gearTargets and #NS.settings.gearTargets > 0
+            and NS.gearData and pd then
+            local targetName = NS.settings.gearTargets[1]
+            local gData = NS.gearData[targetName]
+            if gData then
+                local missing = computeMissing(gData.cost, pd.items or {})
+                -- Ping for newly completed mats
+                NS.gearNotifiedMats = NS.gearNotifiedMats or {}
+                for mat, needed in pairs(gData.cost) do
+                    if (pd.items[mat] or 0) >= needed and not NS.gearNotifiedMats[mat] then
+                        NS.gearNotifiedMats[mat] = true
+                        if NS.settings.webhookOnEvoReady then
+                            sendWebhook(evoPing() .. "✅ **" .. mat .. "** x" .. needed .. " collected for **" .. targetName .. "**!")
+                        end
+                    end
+                end
+                if not next(missing) then
+                    log("Gear: all materials for " .. targetName .. " collected — ready to craft!")
+                    if NS.settings.webhookOnEvoReady then
+                        sendWebhook(evoPing() .. "🎉 **" .. targetName .. "** has all materials — ready to craft!")
+                    end
+                    NS.gearFarmStage  = nil
+                    NS.gearNotifiedMats = nil
+                    remotes.teleport:FireServer()
+                    return
+                else
+                    local currentWorld = State.get("stage")
+                    local currentAct   = State.get("act")
+                    local stillUseful  = false
+                    if currentWorld and currentAct and NS.data and NS.data.matmap then
+                        for mat in pairs(missing) do
+                            local locs = NS.data.matmap[mat]
+                            if locs then
+                                for _, loc in ipairs(locs) do
+                                    if loc.world == currentWorld and loc.act == currentAct then
+                                        stillUseful = true; break
+                                    end
+                                end
+                            end
+                            if stillUseful then break end
+                        end
+                    end
+                    if not stillUseful then
+                        log("Gear: current stage drops nothing needed — returning to lobby to re-route")
+                        remotes.teleport:FireServer()
+                        return
+                    end
+                end
             end
         end
 
@@ -823,6 +896,44 @@ local function bestFarmStage(missing)
     return best
 end
 
+local function runGearOrchestrator(lr)
+    if not NS.settings.autoGear then return end
+    if not NS.gearData then log("Gear: data not loaded"); return end
+    if not NS.settings.gearTargets or #NS.settings.gearTargets == 0 then return end
+
+    local ok, playerData = pcall(function() return lr.playerGet:InvokeServer() end)
+    if not ok or not playerData then log("Gear: failed to get player data"); return end
+
+    local inventory = playerData.items or {}
+
+    NS.gearFarmStage = nil
+
+    for _, targetName in ipairs(NS.settings.gearTargets) do
+        local gData = NS.gearData[targetName]
+        if not gData then
+            log("Gear: no data for " .. targetName)
+        else
+            local missing = computeMissing(gData.cost, inventory)
+            if not next(missing) then
+                log("Gear: " .. targetName .. " has all materials — ready to craft!")
+            else
+                local parts = {}
+                for mat, amt in pairs(missing) do table.insert(parts, mat .. " x" .. amt) end
+                log("Gear: " .. targetName .. " needs: " .. table.concat(parts, ", "))
+                local best = bestFarmStage(missing)
+                if best then
+                    NS.gearFarmStage = best
+                    local matList = table.concat(best.mats, ", ")
+                    log("Gear: farm → " .. best.world .. " " .. best.mode .. " " .. best.diff .. " act " .. best.act .. " [" .. matList .. "]")
+                else
+                    log("Gear: no farmable stage for missing mats")
+                end
+                break
+            end
+        end
+    end
+end
+
 local function runEvoOrchestrator(lr)
     if not NS.settings.autoEvo then return end
     if not NS.data then log("Evo: data not loaded"); return end
@@ -862,7 +973,8 @@ local function runEvoOrchestrator(lr)
 end
 
 local function runLobbyActions(lr)
-    runEvoOrchestrator(lr)  -- run first so evoFarmStage is set before autoJoin loop starts
+    runEvoOrchestrator(lr)
+    runGearOrchestrator(lr)  -- run first so farm stages are set before autoJoin loop starts
     task.wait(1.5)
     runClaim(lr)
     runAutoSell(lr)
@@ -897,8 +1009,10 @@ local function setupLobby()
             while NS.autoJoinGen == myGen do
                 if NS.settings.autoEvo and NS.evoFarmStage then
                     local fs = NS.evoFarmStage
-                    local cfg = { mode=fs.mode, world=fs.world, act=fs.act, difficulty=fs.diff }
-                    if tryJoinMode(lobbyRemotes, cfg) then break end
+                    if tryJoinMode(lobbyRemotes, { mode=fs.mode, world=fs.world, act=fs.act, difficulty=fs.diff }) then break end
+                elseif NS.settings.autoGear and NS.gearFarmStage then
+                    local fs = NS.gearFarmStage
+                    if tryJoinMode(lobbyRemotes, { mode=fs.mode, world=fs.world, act=fs.act, difficulty=fs.diff }) then break end
                 else
                     if attemptAutoJoin(lobbyRemotes) then break end
                 end
@@ -1024,6 +1138,7 @@ local function setupGUI()
     local Tabs = {
         Farm    = Window:AddTab({ Title = "Farm",    Icon = "swords"        }),
         Evo     = Window:AddTab({ Title = "Evo",     Icon = "star"          }),
+        Gear    = Window:AddTab({ Title = "Gear",    Icon = "hammer"        }),
         Units   = Window:AddTab({ Title = "Units",   Icon = "shield"        }),
         Join    = Window:AddTab({ Title = "Join",    Icon = "map-pin"       }),
         Loot    = Window:AddTab({ Title = "Loot",    Icon = "package"       }),
@@ -1070,6 +1185,30 @@ local function setupGUI()
     })
     evoDd:OnChanged(function(Value)
         NS.settings.evoTargets = Value and Value ~= "" and { Value } or {}
+        State.saveSettings()
+    end)
+
+    -- ── Gear ──────────────────────────────────────────────────────
+    addToggle(Tabs.Gear, "autoGear", "Auto Gear", "Farm materials for the target gear piece, then notify when ready to craft")
+
+    local _gearList = {}
+    if NS.gearData then
+        for gearName in pairs(NS.gearData) do
+            table.insert(_gearList, gearName)
+        end
+        table.sort(_gearList)
+    end
+
+    local _gearCurTarget = NS.settings.gearTargets and NS.settings.gearTargets[1] or (_gearList[1] or "")
+    local gearDd = Tabs.Gear:AddDropdown("gearTarget1", {
+        Title      = "Gear Target",
+        Values     = _gearList,
+        Default    = _gearCurTarget,
+        Multi      = false,
+        Searchable = true,
+    })
+    gearDd:OnChanged(function(Value)
+        NS.settings.gearTargets = Value and Value ~= "" and { Value } or {}
         State.saveSettings()
     end)
 
