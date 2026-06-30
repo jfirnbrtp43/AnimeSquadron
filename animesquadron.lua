@@ -812,8 +812,11 @@ local function tryJoinMode(lobbyRemotes, cfg)
         config = { world=c.world, act=c.act, mode="Challenge", difficulty=key }
     elseif cfg.mode == "Infinite" then
         config = { world="Katakara Wasteland", act=1, mode="Infinite", difficulty="Hard", boosted=cfg.boosted or false }
+    elseif cfg.mode == "Permanent" then
+        -- Server expects mode="Challenge" with boosted+only_friends for permanent challenges
+        config = { world=cfg.world, act=cfg.act or 1, mode="Challenge", difficulty=cfg.difficulty or "Normal", boosted=true, only_friends=false }
     else
-        -- Story, Squadron, Raid, Permanent
+        -- Story, Squadron, Raid
         config = { world=cfg.world, act=cfg.act, mode=cfg.mode, difficulty=cfg.difficulty or "Normal" }
     end
 
