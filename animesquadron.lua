@@ -59,6 +59,7 @@ local _defaults = {
     autoEvo           = false,
     evoTargets        = {},    -- unit names to awaken in priority order: {"Goki (SSJ4)", "Caska"}
     autoGear          = false,
+    autoCraft         = false,
     gearTargets       = {},    -- gear piece names to farm materials for
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
@@ -457,11 +458,12 @@ local function setupStageLabelHook(player)
 end
 
 -- ── Evo helpers (defined early so setupEndScreenHook can use them) ─
-local function computeMissing(cost, inventory)
+local function computeMissing(cost, inventory, stats)
     local missing = {}
     for mat, needed in pairs(cost) do
-        if (inventory[mat] or 0) < needed then
-            missing[mat] = needed - (inventory[mat] or 0)
+        local have = (inventory[mat] or 0) + (stats and (stats[mat] or 0) or 0)
+        if have < needed then
+            missing[mat] = needed - have
         end
     end
     return missing
@@ -608,7 +610,7 @@ local function setupEndScreenHook(player, remotes)
             local targetName = NS.settings.gearTargets[1]
             local gData = NS.gearData[targetName]
             if gData then
-                local missing = computeMissing(gData.cost, pd.items or {})
+                local missing = computeMissing(gData.cost, pd.items or {}, pd.stats or {})
                 -- Ping for newly completed mats
                 NS.gearNotifiedMats = NS.gearNotifiedMats or {}
                 for mat, needed in pairs(gData.cost) do
@@ -772,8 +774,9 @@ local function getLobbyRemotes()
         -- Shops
         shopsGet      = shops :WaitForChild("get",            10),  -- (shopId) → itemTable
         shopsBuy      = shops :WaitForChild("buy",            10),  -- (item, shopId, amount) → bool, data
-        -- Evo
+        -- Evo / Gear
         playerGet     = rem  :WaitForChild("Player",          10):WaitForChild("get",    10),  -- () → full playerData incl. items + characters
+        craftGear     = rem  :WaitForChild("Crafting",        10):WaitForChild("craft",  10),  -- (gearName, qty) → bool, playerData
     }
 end
 
@@ -960,13 +963,14 @@ end
 
 local function runGearOrchestrator(lr)
     if not NS.settings.autoGear then return end
-    if not NS.gearData then log("Gear: data not loaded"); return end
+    if not NS.gearData then return end
     if not NS.settings.gearTargets or #NS.settings.gearTargets == 0 then return end
 
     local ok, playerData = pcall(function() return lr.playerGet:InvokeServer() end)
     if not ok or not playerData then log("Gear: failed to get player data"); return end
 
     local inventory = playerData.items or {}
+    local stats     = playerData.stats or {}
 
     NS.gearFarmStage = nil
 
@@ -975,20 +979,42 @@ local function runGearOrchestrator(lr)
         if not gData then
             log("Gear: no data for " .. targetName)
         else
-            local missing = computeMissing(gData.cost, inventory)
+            local missing = computeMissing(gData.cost, inventory, stats)
             if not next(missing) then
-                log("Gear: " .. targetName .. " has all materials — ready to craft!")
+                if NS.settings.autoCraft then
+                    log("Gear: crafting " .. targetName .. "…")
+                    local cOk, cRes = pcall(function() return lr.craftGear:InvokeServer(targetName, 1) end)
+                    if cOk and cRes then
+                        log("Gear: crafted " .. targetName .. "!")
+                        if NS.settings.webhookOnEvoReady then
+                            sendWebhook(evoPing() .. "🔨 **" .. targetName .. "** crafted!")
+                        end
+                        for i, t in ipairs(NS.settings.gearTargets) do
+                            if t == targetName then table.remove(NS.settings.gearTargets, i); break end
+                        end
+                        NS.gearNotifiedMats = nil
+                        State.saveSettings()
+                    else
+                        log("Gear: craft failed")
+                    end
+                else
+                    log("Gear: " .. targetName .. " ready to craft!")
+                end
             else
                 local parts = {}
                 for mat, amt in pairs(missing) do table.insert(parts, mat .. " x" .. amt) end
                 log("Gear: " .. targetName .. " needs: " .. table.concat(parts, ", "))
-                local best = bestFarmStage(missing)
+                -- Only route to stages for mats that have a known drop location
+                local farmable = {}
+                for mat, amt in pairs(missing) do
+                    if NS.data.matmap[mat] then farmable[mat] = amt end
+                end
+                local best = bestFarmStage(farmable)
                 if best then
                     NS.gearFarmStage = best
-                    local matList = table.concat(best.mats, ", ")
-                    log("Gear: farm → " .. best.world .. " " .. best.mode .. " " .. best.diff .. " act " .. best.act .. " [" .. matList .. "]")
+                    log("Gear: farm → " .. best.world .. " " .. best.mode .. " " .. best.diff .. " act " .. best.act .. " [" .. table.concat(best.mats, ", ") .. "]")
                 else
-                    log("Gear: no farmable stage for missing mats")
+                    log("Gear: no farmable stage found")
                 end
                 break
             end
@@ -1254,7 +1280,8 @@ local function setupGUI()
     end)
 
     -- ── Gear ──────────────────────────────────────────────────────
-    addToggle(Tabs.Gear, "autoGear", "Auto Gear", "Farm materials for the target gear piece, then notify when ready to craft")
+    addToggle(Tabs.Gear, "autoGear",   "Auto Gear",   "Farm materials for the selected gear piece")
+    addToggle(Tabs.Gear, "autoCraft",  "Auto Craft",  "Automatically craft the gear piece when all materials are collected, then move to the next target")
 
     local _gearList = {}
     if NS.gearData then
