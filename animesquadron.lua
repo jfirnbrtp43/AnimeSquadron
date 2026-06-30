@@ -102,7 +102,9 @@ local function _webhookPost(body)
 end
 
 local function sendWebhook(msg)
-    _webhookPost({ username = "Anime Squadron", content = msg })
+    local t = os.time()
+    local ts = string.format("<t:%d:T>", t)  -- Discord timestamp tag, renders in viewer's timezone
+    _webhookPost({ username = "Anime Squadron", content = msg .. "  " .. ts })
 end
 
 local function sendWebhookEmbed(embed)
@@ -167,10 +169,16 @@ local function buildStageEmbed(resultText, stage, act, elapsed, pd, runCount)
     end
 
     local titlePrefix = isVictory and "✅ Victory" or "❌ Defeat"
+    -- ISO 8601 timestamp — Discord renders it in the viewer's local timezone
+    local t = os.time()
+    local ts = string.format("%04d-%02d-%02dT%02d:%02d:%02dZ",
+        os.date("!*t", t).year, os.date("!*t", t).month,  os.date("!*t", t).day,
+        os.date("!*t", t).hour, os.date("!*t", t).min,    os.date("!*t", t).sec)
     return {
-        title  = titlePrefix .. " — " .. tostring(stage or "?"),
-        color  = isVictory and 3066993 or 15158332,
-        fields = fields,
+        title     = titlePrefix .. " — " .. tostring(stage or "?"),
+        color     = isVictory and 3066993 or 15158332,
+        fields    = fields,
+        timestamp = ts,
     }
 end
 
@@ -304,6 +312,10 @@ end
 
 function ClearTime.get(stageName, act)
     return _data.clearTimes[stageKey(stageName, act)]
+end
+
+function ClearTime.getAll()
+    return _data.clearTimes
 end
 
 -- ── Static data ───────────────────────────────────────────────────
@@ -524,7 +536,7 @@ local function setupEndScreenHook(player, remotes)
             or (resultText == "Defeat!" and NS.settings.webhookOnDefeat)
         if needPd then
             local ok2, result = pcall(function() return remotes.playersGet:InvokeServer() end)
-            if ok2 and result then pd = result
+            if ok2 and result then pd = result; NS.lastPlayerData = result
             else log("Webhook/Evo: player data fetch failed") end
         end
 
@@ -833,6 +845,7 @@ local function tryJoinMode(lobbyRemotes, cfg)
 
     log("Auto Join: " .. cfg.mode .. " started")
     NS.currentDifficulty = (cfg.mode == "Infinite") and "Hard" or (cfg.difficulty or "Normal")
+    NS.currentStage = { world=config.world, mode=config.mode, diff=config.difficulty or "Hard", act=config.act }
     return true
 end
 
@@ -969,6 +982,7 @@ local function runGearOrchestrator(lr)
     local ok, playerData = pcall(function() return lr.playerGet:InvokeServer() end)
     if not ok or not playerData then log("Gear: failed to get player data"); return end
 
+    NS.lastPlayerData = playerData
     local inventory = playerData.items or {}
     local stats     = playerData.stats or {}
 
@@ -985,15 +999,11 @@ local function runGearOrchestrator(lr)
                     log("Gear: crafting " .. targetName .. "…")
                     local cOk, cRes = pcall(function() return lr.craftGear:InvokeServer(targetName, 1) end)
                     if cOk and cRes then
-                        log("Gear: crafted " .. targetName .. "!")
+                        log("Gear: crafted " .. targetName .. "! Continuing to farm…")
                         if NS.settings.webhookOnEvoReady then
                             sendWebhook(evoPing() .. "🔨 **" .. targetName .. "** crafted!")
                         end
-                        for i, t in ipairs(NS.settings.gearTargets) do
-                            if t == targetName then table.remove(NS.settings.gearTargets, i); break end
-                        end
-                        NS.gearNotifiedMats = nil
-                        State.saveSettings()
+                        NS.gearNotifiedMats = nil  -- reset mat pings for next cycle
                     else
                         log("Gear: craft failed")
                     end
@@ -1030,6 +1040,7 @@ local function runEvoOrchestrator(lr)
     local ok, playerData = pcall(function() return lr.playerGet:InvokeServer() end)
     if not ok or not playerData then log("Evo: failed to get player data"); return end
 
+    NS.lastPlayerData = playerData
     local inventory = playerData.items or {}
 
     NS.evoFarmStage = nil
@@ -1236,6 +1247,7 @@ local function setupGUI()
         Shops    = Window:AddTab({ Title = "Shops",    Icon = "shopping-cart" }),
         Webhook  = Window:AddTab({ Title = "Webhook",  Icon = "bell"          }),
         Priority = Window:AddTab({ Title = "Priority", Icon = "list"          }),
+        Info     = Window:AddTab({ Title = "Info",     Icon = "info"          }),
     }
 
     local function addToggle(tab, key, title, desc)
@@ -1603,6 +1615,173 @@ local function setupGUI()
             State.saveSettings()
         end)
     end
+
+    -- ── Info ──────────────────────────────────────────────────────
+    local _infoStageFilter = "Current"
+
+    Tabs.Info:AddSection("Activity")
+    local lblActivity = Tabs.Info:AddLabel("—")
+
+    Tabs.Info:AddSection("Evo Progress")
+    local lblEvo = Tabs.Info:AddLabel("Disabled")
+
+    Tabs.Info:AddSection("Gear Progress")
+    local lblGear = Tabs.Info:AddLabel("Disabled")
+
+    Tabs.Info:AddSection("Player")
+    local lblPlayer = Tabs.Info:AddLabel("—")
+
+    Tabs.Info:AddSection("Stage Records")
+    local stageFilterDd = Tabs.Info:AddDropdown("infoStageFilter", {
+        Title  = "View",
+        Values = { "Current", "All" },
+        Default = "Current",
+        Multi  = false,
+    })
+    stageFilterDd:OnChanged(function(v) _infoStageFilter = v end)
+    local lblStages = Tabs.Info:AddLabel("—")
+
+    NS.infoGen = (NS.infoGen or 0) + 1
+    local myInfoGen = NS.infoGen
+    task.spawn(function()
+        while NS.infoGen == myInfoGen do
+            local inLobby = (game.PlaceId == LOBBY_PLACE_ID)
+
+            -- Activity
+            local actText
+            if NS.settings.autoGear and NS.gearFarmStage then
+                local fs = NS.gearFarmStage
+                actText = "Farming " .. fs.world .. " · " .. fs.mode .. " " .. fs.diff .. " Act " .. fs.act
+                    .. "\nFor: " .. (NS.settings.gearTargets and NS.settings.gearTargets[1] or "?")
+            elseif NS.settings.autoEvo and NS.evoFarmStage then
+                local fs = NS.evoFarmStage
+                actText = "Farming " .. fs.world .. " · " .. fs.mode .. " " .. fs.diff .. " Act " .. fs.act
+                    .. "\nFor: " .. (NS.settings.evoTargets and NS.settings.evoTargets[1] or "?")
+            elseif inLobby then
+                actText = "In Lobby"
+            else
+                actText = "In Stage"
+            end
+            pcall(function() lblActivity:Set(actText) end)
+
+            -- Evo
+            local evoText
+            if not NS.settings.autoEvo then
+                evoText = "Disabled"
+            elseif not NS.settings.evoTargets or #NS.settings.evoTargets == 0 then
+                evoText = "No target selected"
+            else
+                local targetName = NS.settings.evoTargets[1]
+                local awData = NS.data and NS.data.awaken and NS.data.awaken[targetName]
+                if not awData then
+                    evoText = targetName .. " — no data"
+                else
+                    local pd   = NS.lastPlayerData
+                    local inv  = pd and pd.items or {}
+                    local stat = pd and pd.stats or {}
+                    local mats = {}
+                    for mat in pairs(awData.cost) do table.insert(mats, mat) end
+                    table.sort(mats)
+                    local parts = { targetName .. " → " .. (awData.awakensTo or "?") }
+                    for _, mat in ipairs(mats) do
+                        local needed = awData.cost[mat]
+                        local have   = (inv[mat] or 0) + (stat[mat] or 0)
+                        table.insert(parts, (have >= needed and "✓ " or "· ") .. mat .. " " .. have .. "/" .. needed)
+                    end
+                    evoText = table.concat(parts, "\n")
+                end
+            end
+            pcall(function() lblEvo:Set(evoText) end)
+
+            -- Gear
+            local gearText
+            if not NS.settings.autoGear then
+                gearText = "Disabled"
+            elseif not NS.settings.gearTargets or #NS.settings.gearTargets == 0 then
+                gearText = "No target selected"
+            else
+                local targetName = NS.settings.gearTargets[1]
+                local gData = NS.gearData and NS.gearData[targetName]
+                if not gData then
+                    gearText = targetName .. " — no data"
+                else
+                    local pd   = NS.lastPlayerData
+                    local inv  = pd and pd.items or {}
+                    local stat = pd and pd.stats or {}
+                    local mats = {}
+                    for mat in pairs(gData.cost) do table.insert(mats, mat) end
+                    table.sort(mats)
+                    local parts = { targetName }
+                    for _, mat in ipairs(mats) do
+                        local needed = gData.cost[mat]
+                        local have   = (inv[mat] or 0) + (stat[mat] or 0)
+                        table.insert(parts, (have >= needed and "✓ " or "· ") .. mat .. " " .. have .. "/" .. needed)
+                    end
+                    gearText = table.concat(parts, "\n")
+                end
+            end
+            pcall(function() lblGear:Set(gearText) end)
+
+            -- Player
+            local playerText
+            local pd = NS.lastPlayerData
+            if pd and pd.stats then
+                local s = pd.stats
+                playerText = "Level " .. (s.level or "?")
+                    .. "  ·  Gold " .. (s.Gold or 0)
+                    .. "  ·  Gems " .. (s.Gems or 0)
+                    .. "\nXP " .. (s.XP or 0)
+                    .. "  ·  Bounty Tickets " .. (s["Bounty Tickets"] or 0)
+                    .. "  ·  Trait Shards " .. (s["Trait Shards"] or 0)
+            else
+                playerText = "Loading…"
+            end
+            pcall(function() lblPlayer:Set(playerText) end)
+
+            -- Stage Records
+            local stageText
+            local allRecords = ClearTime.getAll()
+            if _infoStageFilter == "Current" then
+                if inLobby then
+                    stageText = "In Lobby"
+                elseif NS.currentStage then
+                    local cs    = NS.currentStage
+                    local key   = cs.world .. "|" .. tostring(cs.act)
+                    local entry = allRecords[key]
+                    local header = cs.world .. " · " .. cs.mode .. " " .. cs.diff .. " Act " .. cs.act
+                    if entry then
+                        local cold = entry.count < 3 and "  (cold)" or ""
+                        stageText = header
+                            .. "\nBest " .. string.format("%d:%02d", math.floor(entry.best/60), entry.best%60)
+                            .. "  ·  Avg "  .. string.format("%d:%02d", math.floor(entry.avg/60),  entry.avg%60)
+                            .. "  ·  Runs " .. entry.count .. cold
+                    else
+                        stageText = header .. "\nNo records yet"
+                    end
+                else
+                    stageText = "No stage active"
+                end
+            else
+                if not next(allRecords) then
+                    stageText = "No records yet"
+                else
+                    local lines = {}
+                    for key, entry in pairs(allRecords) do
+                        -- key format: "World Name|act"
+                        local world, act = key:match("^(.+)|(%d+)$")
+                        local best = string.format("%d:%02d", math.floor(entry.best/60), entry.best%60)
+                        local label = (world or key) .. " Act " .. (act or "?")
+                        table.insert(lines, label .. "  —  Best " .. best .. " (" .. entry.count .. " runs)")
+                    end
+                    table.sort(lines)
+                    stageText = table.concat(lines, "\n")
+                end
+            end
+            pcall(function() lblStages:Set(stageText) end)
+
+            task.wait(5)
+        end
+    end)
 
     NS.guiWindow = Window
     Window:SelectTab(1)
