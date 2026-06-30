@@ -1215,59 +1215,64 @@ end
 -- ── GUI ──────────────────────────────────────────────────────────
 local function setupGUI()
     -- Destroy any existing GUI from a previous execute
-    if NS.guiWindow then
-        pcall(function() NS.guiWindow:Destroy() end)
-        NS.guiWindow = nil
+    if NS.guiLibrary then
+        pcall(function() NS.guiLibrary:Unload() end)
+        NS.guiLibrary = nil
     end
+    NS.guiWindow = nil
 
-    local ok, Fluent = pcall(function()
-        return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+    local ok, Library = pcall(function()
+        return loadstring(game:HttpGet(
+            "https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/Library.lua"
+        ))()
     end)
-    if not ok or not Fluent then
-        log("GUI: failed to load Fluent — " .. tostring(Fluent))
+    if not ok or not Library then
+        log("GUI: failed to load Linoria — " .. tostring(Library))
         return
     end
 
-    local Window = Fluent:CreateWindow({
-        Title       = "Anime Squadron",
-        SubTitle    = "auto-farm",
-        TabWidth    = 160,
-        Size        = UDim2.fromOffset(580, 460),
-        Acrylic     = true,
-        Theme       = "Dark",
-        MinimizeKey = Enum.KeyCode.RightControl,
+    local Window = Library:CreateWindow({
+        Title        = "Anime Squadron",
+        Center       = true,
+        AutoShow     = true,
+        TabPadding   = 8,
+        MenuFadeTime = 0.2,
     })
 
     local Tabs = {
-        Farm    = Window:AddTab({ Title = "Farm",    Icon = "swords"   }),
-        Join    = Window:AddTab({ Title = "Join",    Icon = "map-pin"  }),
-        Evo     = Window:AddTab({ Title = "Evo",     Icon = "star"     }),
-        Gear    = Window:AddTab({ Title = "Gear",    Icon = "hammer"   }),
-        Upgrade = Window:AddTab({ Title = "Upgrade", Icon = "shield"   }),
-        Lobby   = Window:AddTab({ Title = "Lobby",   Icon = "package"  }),
-        Webhook = Window:AddTab({ Title = "Webhook", Icon = "bell"     }),
-        Info    = Window:AddTab({ Title = "Info",    Icon = "info"     }),
+        Lobby   = Window:AddTab("Lobby"),
+        Play    = Window:AddTab("Play"),
+        AdvFarm = Window:AddTab("Adv Farm"),
+        Webhook = Window:AddTab("Webhook"),
+        Info    = Window:AddTab("Info"),
     }
 
-    local function addToggle(tab, key, title, desc)
-        local t = tab:AddToggle(key, { Title = title, Description = desc, Default = NS.settings[key] == true })
-        t:OnChanged(function()
-            NS.settings[key] = t.Value
-            State.saveSettings()
-        end)
-        return t
+    local function addToggle(groupbox, key, text, tooltip)
+        groupbox:AddToggle(key, {
+            Text     = text,
+            Default  = NS.settings[key] == true,
+            Tooltip  = tooltip,
+            Callback = function(Value)
+                NS.settings[key] = Value
+                State.saveSettings()
+            end,
+        })
     end
 
     -- ── Farm ─────────────────────────────────────────────────────
-    addToggle(Tabs.Farm, "autoStart",         "Auto Start",              "Fire start when the ready screen appears")
-    addToggle(Tabs.Farm, "autoMaxSpeed",      "Auto Max Speed",          "Set highest available speed on game start")
-    addToggle(Tabs.Farm, "autoNext",          "Auto Next",               "Advance to next act on victory")
-    addToggle(Tabs.Farm, "autoReplay",        "Auto Replay",             "Replay the same act on victory")
-    addToggle(Tabs.Farm, "autoLeave",         "Auto Leave",              "Teleport to lobby if no other action fires")
-    addToggle(Tabs.Farm, "challengeReturn30", "30-min Challenge Return", "Leave to lobby at XX:00 and XX:30 for challenge reset")
+    local FarmBox = Tabs.Play:AddLeftGroupbox("Auto Play")
+    addToggle(FarmBox, "autoStart",    "Auto Start",    "Fire start when the ready screen appears")
+    addToggle(FarmBox, "autoMaxSpeed", "Auto Max Speed","Set highest available speed on game start")
+    addToggle(FarmBox, "autoNext",     "Auto Next",     "Advance to next act on victory")
+    addToggle(FarmBox, "autoReplay",   "Auto Replay",   "Replay the same act on victory")
+    addToggle(FarmBox, "autoLeave",    "Auto Leave",    "Teleport to lobby if no other action fires")
+
+    local FarmMiscBox = Tabs.Play:AddRightGroupbox("Misc")
+    addToggle(FarmMiscBox, "challengeReturn30", "30-min Challenge Return", "Leave to lobby at XX:00 and XX:30 for challenge reset")
 
     -- ── Evo ──────────────────────────────────────────────────────
-    addToggle(Tabs.Evo, "autoEvo", "Auto Evo", "Farm materials for the target unit, then notify when ready to awaken")
+    local EvoBox = Tabs.AdvFarm:AddLeftGroupbox("Auto Evo")
+    addToggle(EvoBox, "autoEvo", "Auto Evo", "Farm materials for the target unit, then notify when ready to awaken")
 
     local _evoUnitList = {}
     if NS.data and NS.data.awaken then
@@ -1277,22 +1282,22 @@ local function setupGUI()
         table.sort(_evoUnitList)
     end
 
-    local _evoCurTarget = NS.settings.evoTargets and NS.settings.evoTargets[1] or (_evoUnitList[1] or "")
-    local evoDd = Tabs.Evo:AddDropdown("evoTarget1", {
-        Title      = "Evo Target",
+    EvoBox:AddDropdown("evoTarget1", {
         Values     = _evoUnitList,
-        Default    = _evoCurTarget,
+        Default    = (NS.settings.evoTargets and NS.settings.evoTargets[1]) or (_evoUnitList[1] or ""),
         Multi      = false,
+        Text       = "Evo Target",
         Searchable = true,
+        Callback   = function(Value)
+            NS.settings.evoTargets = (Value and Value ~= "") and { Value } or {}
+            State.saveSettings()
+        end,
     })
-    evoDd:OnChanged(function(Value)
-        NS.settings.evoTargets = Value and Value ~= "" and { Value } or {}
-        State.saveSettings()
-    end)
 
     -- ── Gear ──────────────────────────────────────────────────────
-    addToggle(Tabs.Gear, "autoGear",   "Auto Gear",   "Farm materials for the selected gear piece")
-    addToggle(Tabs.Gear, "autoCraft",  "Auto Craft",  "Automatically craft the gear piece when all materials are collected, then move to the next target")
+    local GearBox = Tabs.AdvFarm:AddLeftGroupbox("Auto Gear")
+    addToggle(GearBox, "autoGear",  "Auto Gear",  "Farm materials for the selected gear piece")
+    addToggle(GearBox, "autoCraft", "Auto Craft", "Automatically craft when all materials are collected, then keep farming")
 
     local _gearList = {}
     if NS.gearData then
@@ -1302,54 +1307,54 @@ local function setupGUI()
         table.sort(_gearList)
     end
 
-    local _gearCurTarget = NS.settings.gearTargets and NS.settings.gearTargets[1] or (_gearList[1] or "")
-    local gearDd = Tabs.Gear:AddDropdown("gearTarget1", {
-        Title      = "Gear Target",
+    GearBox:AddDropdown("gearTarget1", {
         Values     = _gearList,
-        Default    = _gearCurTarget,
+        Default    = (NS.settings.gearTargets and NS.settings.gearTargets[1]) or (_gearList[1] or ""),
         Multi      = false,
+        Text       = "Gear Target",
         Searchable = true,
+        Callback   = function(Value)
+            NS.settings.gearTargets = (Value and Value ~= "") and { Value } or {}
+            State.saveSettings()
+        end,
     })
-    gearDd:OnChanged(function(Value)
-        NS.settings.gearTargets = Value and Value ~= "" and { Value } or {}
-        State.saveSettings()
-    end)
 
     -- ── Upgrade ───────────────────────────────────────────────────
-    addToggle(Tabs.Upgrade, "autoUpgrade", "Auto Upgrade", "Automatically spend Yen to upgrade equipped units")
-
-    local upgradeModeDd = Tabs.Upgrade:AddDropdown("upgradeMode", {
-        Title       = "Upgrade Mode",
-        Description = "Max: fully upgrade one slot before moving on. Cheapest: one upgrade per slot in rotation.",
-        Values      = { "max", "cheapest" },
-        Multi       = false,
-        Default     = NS.settings.upgradeMode or "max",
+    local UpgradeBox = Tabs.Play:AddLeftGroupbox("Auto Upgrade")
+    addToggle(UpgradeBox, "autoUpgrade", "Auto Upgrade", "Automatically spend Yen to upgrade equipped units")
+    UpgradeBox:AddDropdown("upgradeMode", {
+        Values   = { "max", "cheapest" },
+        Default  = NS.settings.upgradeMode or "max",
+        Multi    = false,
+        Text     = "Upgrade Mode",
+        Tooltip  = "Max: fully upgrade one slot before moving on. Cheapest: one upgrade per slot in rotation.",
+        Callback = function(Value)
+            NS.settings.upgradeMode = Value
+            State.saveSettings()
+        end,
     })
-    upgradeModeDd:OnChanged(function(Value)
-        NS.settings.upgradeMode = Value
-        State.saveSettings()
-    end)
 
+    local SlotsBox = Tabs.Play:AddRightGroupbox("Slot Priority")
     for i = 1, 6 do
         local slotIdx = i
         local curPriority = 0
         for _, s in ipairs(NS.settings.upgradeSlots) do
             if s.slot == slotIdx then curPriority = s.priority; break end
         end
-        local sl = Tabs.Upgrade:AddSlider("upgradeSlot" .. slotIdx, {
-            Title       = "Slot " .. slotIdx .. " Priority",
-            Description = "0 = disabled. Lower number upgraded first.",
-            Default     = curPriority,
-            Min         = 0,
-            Max         = 6,
-            Rounding    = 0,
+        SlotsBox:AddSlider("upgradeSlot" .. slotIdx, {
+            Text     = "Slot " .. slotIdx,
+            Default  = curPriority,
+            Min      = 0,
+            Max      = 6,
+            Rounding = 0,
+            Tooltip  = "0 = disabled. Lower number upgraded first.",
+            Callback = function(Value)
+                for _, s in ipairs(NS.settings.upgradeSlots) do
+                    if s.slot == slotIdx then s.priority = Value; break end
+                end
+                State.saveSettings()
+            end,
         })
-        sl:OnChanged(function(Value)
-            for _, s in ipairs(NS.settings.upgradeSlots) do
-                if s.slot == slotIdx then s.priority = Value; break end
-            end
-            State.saveSettings()
-        end)
     end
 
     -- ── Join ──────────────────────────────────────────────────────
@@ -1385,28 +1390,18 @@ local function setupGUI()
         infinite="infinite", permanent="challenge",
     }
 
-    local function buildActList(modeName, worldName)
-        local key = _MODE_DATA_KEY[modeName:lower()] or modeName:lower()
-        local d   = _JOIN_ACT_DATA[key]
-        local max = (d and worldName and d[worldName]) or 10
-        local t   = {}
-        for i = 1, max do t[i] = tostring(i) end
-        return t
-    end
-
-    local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclipse (Before)"}
+local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclipse (Before)"}
     local _JOIN_RAID_WORLDS      = {"GT City","Eclipse (Before)"}
-    local _JOIN_INFINITE_WORLDS  = {"Katakara Wasteland"}
     local _JOIN_PERMANENT_WORLDS = {"Katakara Bridge","The Hero Hunter"}
     local _JOIN_DIFFS            = {"Normal","Hard"}
 
     local _JOIN_MODE_DEFS = {
-        { mode="Story",     worlds=_JOIN_STORY_WORLDS,     hasAct=true,  hasDiff=true,  hasBoost=false },
-        { mode="Squadron",  worlds=_JOIN_STORY_WORLDS,     hasAct=true,  hasDiff=true,  hasBoost=false },
-        { mode="Raid",      worlds=_JOIN_RAID_WORLDS,      hasAct=true,  hasDiff=true,  hasBoost=false },
-        { mode="Challenge", worlds=nil,                    hasAct=false, hasDiff=false, hasBoost=false },
-        { mode="Infinite",  worlds=nil,                    hasAct=false, hasDiff=false, hasBoost=true  },
-        { mode="Permanent", worlds=_JOIN_PERMANENT_WORLDS, hasAct=false, hasDiff=true,  hasBoost=false },
+        { mode="Story",     worlds=_JOIN_STORY_WORLDS,     hasAct=true,  hasDiff=true,  hasBoost=false, col="left"  },
+        { mode="Squadron",  worlds=_JOIN_STORY_WORLDS,     hasAct=true,  hasDiff=true,  hasBoost=false, col="left"  },
+        { mode="Raid",      worlds=_JOIN_RAID_WORLDS,      hasAct=true,  hasDiff=true,  hasBoost=false, col="left"  },
+        { mode="Challenge", worlds=nil,                    hasAct=false, hasDiff=false, hasBoost=false, col="right" },
+        { mode="Infinite",  worlds=nil,                    hasAct=false, hasDiff=false, hasBoost=true,  col="right" },
+        { mode="Permanent", worlds=_JOIN_PERMANENT_WORLDS, hasAct=false, hasDiff=true,  hasBoost=false, col="right" },
     }
 
     local function getJoinEntry(modeName)
@@ -1419,225 +1414,234 @@ local function setupGUI()
         local mn    = def.mode
         local entry = getJoinEntry(mn)
         if entry then
-            Tabs.Join:AddSection(mn)
+            local modeBox
+            if def.col == "left" then
+                modeBox = Tabs.Lobby:AddLeftGroupbox(mn)
+            else
+                modeBox = Tabs.Lobby:AddRightGroupbox(mn)
+            end
 
             if def.worlds then
-                local curWorld = entry.world or def.worlds[1]
-                local worldDd = Tabs.Join:AddDropdown("join_world_" .. mn, {
-                    Title   = "World",
-                    Values  = def.worlds,
-                    Default = curWorld,
-                    Multi   = false,
+                modeBox:AddDropdown("join_world_" .. mn, {
+                    Values   = def.worlds,
+                    Default  = entry.world or def.worlds[1],
+                    Multi    = false,
+                    Text     = "World",
+                    Callback = function(Value)
+                        entry.world = Value
+                        local d = _JOIN_ACT_DATA[_MODE_DATA_KEY[mn:lower()] or mn:lower()]
+                        local newMax = (d and d[Value]) or 10
+                        if (entry.act or 1) > newMax then entry.act = newMax end
+                        State.saveSettings()
+                    end,
                 })
-                worldDd:OnChanged(function(Value)
-                    entry.world = Value
-                    -- clamp act to new world's max
-                    local d = _JOIN_ACT_DATA[_MODE_DATA_KEY[mn:lower()] or mn:lower()]
-                    local newMax = (d and d[Value]) or 10
-                    if (entry.act or 1) > newMax then entry.act = newMax end
-                    State.saveSettings()
-                end)
             end
 
             if def.hasAct then
-                local curWorld = entry.world or (def.worlds and def.worlds[1])
-                local actList  = buildActList(mn, curWorld)
-                local curAct   = tostring(math.min(entry.act or 1, #actList))
-                local actDd = Tabs.Join:AddDropdown("join_act_" .. mn, {
-                    Title   = "Act",
-                    Values  = actList,
-                    Default = curAct,
-                    Multi   = false,
+                local _modeKey  = _MODE_DATA_KEY[mn:lower()] or mn:lower()
+                local _modeData = _JOIN_ACT_DATA[_modeKey]
+                local _maxActs  = 0
+                if _modeData and def.worlds then
+                    for _, w in ipairs(def.worlds) do
+                        local n = _modeData[w] or 0
+                        if n > _maxActs then _maxActs = n end
+                    end
+                end
+                if _maxActs == 0 then _maxActs = 10 end
+                local actList = {}
+                for i = 1, _maxActs do actList[i] = tostring(i) end
+                modeBox:AddDropdown("join_act_" .. mn, {
+                    Values   = actList,
+                    Default  = tostring(math.min(entry.act or 1, _maxActs)),
+                    Multi    = false,
+                    Text     = "Act",
+                    Callback = function(Value)
+                        entry.act = tonumber(Value)
+                        State.saveSettings()
+                    end,
                 })
-                actDd:OnChanged(function(Value)
-                    entry.act = tonumber(Value)
-                    State.saveSettings()
-                end)
             end
 
             if def.hasDiff then
                 local curDiff = entry.difficulty or "Normal"
                 if curDiff ~= "Normal" and curDiff ~= "Hard" then curDiff = "Normal" end
-                local diffDd = Tabs.Join:AddDropdown("join_diff_" .. mn, {
-                    Title   = "Difficulty",
-                    Values  = _JOIN_DIFFS,
-                    Default = curDiff,
-                    Multi   = false,
+                modeBox:AddDropdown("join_diff_" .. mn, {
+                    Values   = _JOIN_DIFFS,
+                    Default  = curDiff,
+                    Multi    = false,
+                    Text     = "Difficulty",
+                    Callback = function(Value)
+                        entry.difficulty = Value
+                        State.saveSettings()
+                    end,
                 })
-                diffDd:OnChanged(function(Value)
-                    entry.difficulty = Value
-                    State.saveSettings()
-                end)
             end
 
             if mn == "Challenge" then
-                local typeDd = Tabs.Join:AddDropdown("join_ctype", {
-                    Title   = "Type",
-                    Values  = {"30m","Daily"},
-                    Default = (entry.challengeType == "1d") and "Daily" or "30m",
-                    Multi   = false,
+                modeBox:AddDropdown("join_ctype", {
+                    Values   = {"30m","Daily"},
+                    Default  = (entry.challengeType == "1d") and "Daily" or "30m",
+                    Multi    = false,
+                    Text     = "Type",
+                    Callback = function(Value)
+                        entry.challengeType = (Value == "Daily") and "1d" or "30m"
+                        State.saveSettings()
+                    end,
                 })
-                typeDd:OnChanged(function(Value)
-                    entry.challengeType = (Value == "Daily") and "1d" or "30m"
-                    State.saveSettings()
-                end)
             end
 
             if def.hasBoost then
-                local boostTog = Tabs.Join:AddToggle("join_boost_" .. mn, {
-                    Title   = "Boost",
-                    Default = entry.boosted == true,
+                modeBox:AddToggle("join_boost_" .. mn, {
+                    Text     = "Boost",
+                    Default  = entry.boosted == true,
+                    Callback = function(Value)
+                        entry.boosted = Value
+                        State.saveSettings()
+                    end,
                 })
-                boostTog:OnChanged(function()
-                    entry.boosted = boostTog.Value
-                    State.saveSettings()
-                end)
             end
 
-            local tog = Tabs.Join:AddToggle("join_en_" .. mn, {
-                Title   = "Enable",
-                Default = entry.enabled == true,
+            modeBox:AddToggle("join_en_" .. mn, {
+                Text     = "Enable",
+                Default  = entry.enabled == true,
+                Callback = function(Value)
+                    entry.enabled = Value
+                    State.saveSettings()
+                end,
             })
-            tog:OnChanged(function()
-                entry.enabled = tog.Value
-                State.saveSettings()
-            end)
         end
     end
 
-    Tabs.Join:AddSection("Mode Priority")
+    local PriorityBox = Tabs.Lobby:AddRightGroupbox("Mode Priority")
     for _, modeName in ipairs({ "Story", "Squadron", "Raid", "Challenge", "Infinite", "Permanent" }) do
         local mn = modeName
         local curPriority = 99
         for _, m in ipairs(NS.settings.joinModes) do
             if m.mode == mn then curPriority = m.priority or 99; break end
         end
-        local sl = Tabs.Join:AddSlider("pri_" .. mn, {
-            Title       = mn,
-            Description = "Lower number = tried first when multiple modes are enabled",
-            Default     = curPriority,
-            Min         = 1,
-            Max         = 6,
-            Rounding    = 0,
+        PriorityBox:AddSlider("pri_" .. mn, {
+            Text     = mn,
+            Default  = curPriority,
+            Min      = 1,
+            Max      = 6,
+            Rounding = 0,
+            Tooltip  = "Lower number = tried first when multiple modes are enabled",
+            Callback = function(Value)
+                for _, m in ipairs(NS.settings.joinModes) do
+                    if m.mode == mn then m.priority = Value; break end
+                end
+                State.saveSettings()
+            end,
         })
-        sl:OnChanged(function(Value)
-            for _, m in ipairs(NS.settings.joinModes) do
-                if m.mode == mn then m.priority = Value; break end
-            end
-            State.saveSettings()
-        end)
     end
 
     -- ── Lobby ─────────────────────────────────────────────────────
-    addToggle(Tabs.Lobby, "autoClaimQuests",  "Auto Claim Quests",  "Claim all completed quests on lobby load")
-    addToggle(Tabs.Lobby, "autoClaimSpecial", "Auto Claim Special", "Claim special quest rewards on lobby load")
-
-    local autoSellDd = Tabs.Lobby:AddDropdown("autoSell", {
-        Title       = "Auto Sell",
-        Description = "Automatically sell units of selected rarities after summoning",
-        Values      = { "Rare", "Epic", "Legendary", "Mythic" },
-        Multi       = true,
-        Default     = NS.settings.autoSell or {},
+    local QuestsBox = Tabs.Lobby:AddLeftGroupbox("Quests & Summon")
+    addToggle(QuestsBox, "autoClaimQuests",  "Auto Claim Quests",  "Claim all completed quests on lobby load")
+    addToggle(QuestsBox, "autoClaimSpecial", "Auto Claim Special", "Claim special quest rewards on lobby load")
+    addToggle(QuestsBox, "autoSummon",       "Auto Summon",        "Summon on the selected banner on lobby load")
+    QuestsBox:AddDropdown("summonBanner", {
+        Values   = { "Basic Banner", "Selection Banner" },
+        Default  = NS.settings.summonBanner or "Basic Banner",
+        Multi    = false,
+        Text     = "Banner",
+        Callback = function(Value)
+            NS.settings.summonBanner = Value
+            State.saveSettings()
+        end,
     })
-    autoSellDd:OnChanged(function(Value)
-        local selected = {}
-        for v, state in pairs(Value) do
-            if state then table.insert(selected, v) end
-        end
-        NS.settings.autoSell = selected
-        State.saveSettings()
-    end)
-
-    addToggle(Tabs.Lobby, "autoSummon", "Auto Summon", "Summon on the selected banner on lobby load")
-
-    local bannerDd = Tabs.Lobby:AddDropdown("summonBanner", {
-        Title   = "Banner",
-        Values  = { "Basic Banner", "Selection Banner" },
-        Multi   = false,
-        Default = NS.settings.summonBanner or "Basic Banner",
+    QuestsBox:AddDropdown("summonAmount", {
+        Values   = { "1", "10" },
+        Default  = tostring(NS.settings.summonAmount or 1),
+        Multi    = false,
+        Text     = "Summon Amount",
+        Callback = function(Value)
+            NS.settings.summonAmount = tonumber(Value)
+            State.saveSettings()
+        end,
     })
-    bannerDd:OnChanged(function(Value)
-        NS.settings.summonBanner = Value
-        State.saveSettings()
-    end)
-
-    local amountDd = Tabs.Lobby:AddDropdown("summonAmount", {
-        Title   = "Summon Amount",
-        Values  = { "1", "10" },
-        Multi   = false,
-        Default = tostring(NS.settings.summonAmount or 1),
+    QuestsBox:AddDropdown("autoSell", {
+        Values   = { "Rare", "Epic", "Legendary", "Mythic" },
+        Default  = NS.settings.autoSell or {},
+        Multi    = true,
+        Text     = "Auto Sell",
+        Tooltip  = "Automatically sell units of selected rarities after summoning",
+        Callback = function(Value)
+            local selected = {}
+            for v, state in pairs(Value) do
+                if state then table.insert(selected, v) end
+            end
+            NS.settings.autoSell = selected
+            State.saveSettings()
+        end,
     })
-    amountDd:OnChanged(function(Value)
-        NS.settings.summonAmount = tonumber(Value)
-        State.saveSettings()
-    end)
 
-    Tabs.Lobby:AddSection("Shops")
-    addToggle(Tabs.Lobby, "autoRaidShop", "Auto Raid Shop", "Buy configured items from the raid shop on lobby load")
-    addToggle(Tabs.Lobby, "autoMerchant", "Auto Merchant",  "Buy configured items from the merchant on lobby load")
+    local ShopsBox = Tabs.Lobby:AddRightGroupbox("Shops")
+    addToggle(ShopsBox, "autoRaidShop", "Auto Raid Shop", "Buy configured items from the raid shop on lobby load")
+    addToggle(ShopsBox, "autoMerchant", "Auto Merchant",  "Buy configured items from the merchant on lobby load")
 
     -- ── Webhook ───────────────────────────────────────────────────
-    Tabs.Webhook:AddInput("webhookUrl", {
-        Title       = "Webhook URL",
+    local WebhookConfigBox = Tabs.Webhook:AddLeftGroupbox("Config")
+    WebhookConfigBox:AddInput("webhookUrl", {
         Default     = NS.settings.webhookUrl or "",
-        Placeholder = "https://discord.com/api/webhooks/...",
         Numeric     = false,
         Finished    = true,
+        Text        = "Webhook URL",
+        Placeholder = "https://discord.com/api/webhooks/...",
         Callback    = function(Value)
             NS.settings.webhookUrl = Value
             State.saveSettings()
-        end
+        end,
     })
-
-    Tabs.Webhook:AddInput("webhookUserId", {
-        Title       = "Ping User ID",
-        Description = "Your Discord User ID — leave empty to send without a ping",
+    WebhookConfigBox:AddInput("webhookUserId", {
         Default     = NS.settings.webhookUserId or "",
-        Placeholder = "123456789012345678",
         Numeric     = false,
         Finished    = true,
+        Text        = "Ping User ID",
+        Tooltip     = "Your Discord User ID — leave empty to send without a ping",
+        Placeholder = "123456789012345678",
         Callback    = function(Value)
             NS.settings.webhookUserId = Value
             State.saveSettings()
-        end
+        end,
     })
 
-    addToggle(Tabs.Webhook, "webhookOnVictory",  "Notify on Victory",      "Send a stage summary embed to Discord on victory")
-    addToggle(Tabs.Webhook, "webhookOnDefeat",   "Notify on Defeat",       "Ping Discord on defeat")
-    addToggle(Tabs.Webhook, "webhookOnEvoReady", "Notify when Evo Ready",  "Ping you when a mat is done or all mats are collected")
-
-    Tabs.Webhook:AddButton({
-        Title       = "Test Webhook",
-        Description = "Send a test ping to verify the URL is working",
-        Callback    = function()
+    local WebhookNotifBox = Tabs.Webhook:AddRightGroupbox("Notifications")
+    addToggle(WebhookNotifBox, "webhookOnVictory",  "On Victory",  "Send a stage summary embed to Discord on victory")
+    addToggle(WebhookNotifBox, "webhookOnDefeat",   "On Defeat",   "Ping Discord on defeat")
+    addToggle(WebhookNotifBox, "webhookOnEvoReady", "On Evo Ready","Ping you when a mat is done or all mats are collected")
+    WebhookNotifBox:AddButton({
+        Text    = "Test Webhook",
+        Func    = function()
             sendWebhook("🔔 Test ping from Anime Squadron — webhook is working!")
-        end
+        end,
+        Tooltip = "Send a test ping to verify the URL is working",
     })
 
     -- ── Info ──────────────────────────────────────────────────────
     local _infoStageFilter = "Current"
 
-    Tabs.Info:AddSection("Activity")
-    local lblActivity = Tabs.Info:AddParagraph({ Title = "", Content = "—" })
+    local ActivityBox    = Tabs.Info:AddLeftGroupbox("Activity")
+    local lblActivity    = ActivityBox:AddLabel("—", true)
 
-    Tabs.Info:AddSection("Evo Progress")
-    local lblEvo = Tabs.Info:AddParagraph({ Title = "", Content = "Disabled" })
+    local EvoProgBox     = Tabs.Info:AddLeftGroupbox("Evo Progress")
+    local lblEvo         = EvoProgBox:AddLabel("Disabled", true)
 
-    Tabs.Info:AddSection("Gear Progress")
-    local lblGear = Tabs.Info:AddParagraph({ Title = "", Content = "Disabled" })
+    local GearProgBox    = Tabs.Info:AddRightGroupbox("Gear Progress")
+    local lblGear        = GearProgBox:AddLabel("Disabled", true)
 
-    Tabs.Info:AddSection("Player")
-    local lblPlayer = Tabs.Info:AddParagraph({ Title = "", Content = "—" })
+    local PlayerBox      = Tabs.Info:AddRightGroupbox("Player")
+    local lblPlayer      = PlayerBox:AddLabel("—", true)
 
-    Tabs.Info:AddSection("Stage Records")
-    local stageFilterDd = Tabs.Info:AddDropdown("infoStageFilter", {
-        Title  = "View",
-        Values = { "Current", "All" },
-        Default = "Current",
-        Multi  = false,
+    local StageBox       = Tabs.Info:AddRightGroupbox("Stage Records")
+    StageBox:AddDropdown("infoStageFilter", {
+        Values   = { "Current", "All" },
+        Default  = "Current",
+        Multi    = false,
+        Text     = "View",
+        Callback = function(v) _infoStageFilter = v end,
     })
-    stageFilterDd:OnChanged(function(v) _infoStageFilter = v end)
-    local lblStages = Tabs.Info:AddParagraph({ Title = "", Content = "—" })
+    local lblStages = StageBox:AddLabel("—", true)
 
     NS.infoGen = (NS.infoGen or 0) + 1
     local myInfoGen = NS.infoGen
@@ -1704,7 +1708,7 @@ local function setupGUI()
                     table.insert(actLines, "In Stage")
                 end
             end
-            pcall(function() lblActivity:SetDesc(table.concat(actLines, "\n")) end)
+            pcall(function() lblActivity:SetText(table.concat(actLines, "\n")) end)
 
             -- Evo
             local evoText
@@ -1733,7 +1737,7 @@ local function setupGUI()
                     evoText = table.concat(parts, "\n")
                 end
             end
-            pcall(function() lblEvo:SetDesc(evoText) end)
+            pcall(function() lblEvo:SetText(evoText) end)
 
             -- Gear
             local gearText
@@ -1762,7 +1766,7 @@ local function setupGUI()
                     gearText = table.concat(parts, "\n")
                 end
             end
-            pcall(function() lblGear:SetDesc(gearText) end)
+            pcall(function() lblGear:SetText(gearText) end)
 
             -- Player
             local playerText
@@ -1778,7 +1782,7 @@ local function setupGUI()
             else
                 playerText = "Loading…"
             end
-            pcall(function() lblPlayer:SetDesc(playerText) end)
+            pcall(function() lblPlayer:SetText(playerText) end)
 
             -- Stage Records
             local stageText
@@ -1830,20 +1834,18 @@ local function setupGUI()
                     stageText = table.concat(lines, "\n")
                 end
             end
-            pcall(function() lblStages:SetDesc(stageText) end)
+            pcall(function() lblStages:SetText(stageText) end)
 
             task.wait(5)
         end
     end)
 
-    NS.guiWindow = Window
-    Window:SelectTab(1)
+    NS.guiLibrary = Library
+    NS.guiWindow  = Window
 
-    Fluent:Notify({
-        Title    = "Anime Squadron",
-        Content  = "Script loaded.",
-        Duration = 4,
-    })
+    pcall(function()
+        Library:Notify("Script loaded.", 4)
+    end)
 
     log("GUI loaded")
 end
