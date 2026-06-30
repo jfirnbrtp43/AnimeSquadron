@@ -533,6 +533,7 @@ local function setupEndScreenHook(player, remotes)
         local needPd = (resultText == "Victory!" and (
                 NS.settings.webhookOnVictory
                 or (NS.settings.autoEvo and NS.settings.evoTargets and #NS.settings.evoTargets > 0)
+                or NS.permCapKey ~= nil
             ))
             or (resultText == "Defeat!" and NS.settings.webhookOnDefeat)
         if needPd then
@@ -669,6 +670,19 @@ local function setupEndScreenHook(player, remotes)
             end
         end
 
+        -- Permanent cap check: leave when daily Trait Shard cap is reached
+        if resultText == "Victory!" and NS.permCapKey and pd then
+            local current = (pd.caps or {})[NS.permCapKey] or 0
+            log("Permanent: " .. current .. "/" .. NS.permCapMax .. " Trait Shards today")
+            if current >= NS.permCapMax then
+                log("Permanent: daily cap reached — returning to lobby")
+                NS.permCapKey = nil
+                NS.permCapMax = nil
+                remotes.teleport:FireServer()
+                return
+            end
+        end
+
         -- Re-snapshot inventory so next stage's diff only shows that run's gains
         task.spawn(function()
             local snapOk, snap = pcall(function() return remotes.playersGet:InvokeServer() end)
@@ -793,6 +807,15 @@ local function getLobbyRemotes()
     }
 end
 
+-- ── Permanent challenge metadata ────────────────────────────────
+local PERMANENT_CHALLENGES = {
+    { world = "The Hero Hunter", cap = 30  },
+    { world = "Katakara Bridge", cap = 100 },
+}
+local function permCapKey(world)
+    return "challenge_" .. world:lower():gsub(" ", "_") .. "_1_trait_shards"
+end
+
 -- ── Auto Join ────────────────────────────────────────────────────
 local function tryJoinMode(lobbyRemotes, cfg)
     -- Build the config table the server expects
@@ -813,8 +836,33 @@ local function tryJoinMode(lobbyRemotes, cfg)
     elseif cfg.mode == "Infinite" then
         config = { world="Katakara Wasteland", act=1, mode="Infinite", difficulty="Hard", boosted=cfg.boosted or false }
     elseif cfg.mode == "Permanent" then
-        -- Server expects mode="Challenge" with boosted+only_friends for permanent challenges
-        config = { world=cfg.world, act=cfg.act or 1, mode="Challenge", difficulty=cfg.difficulty or "Normal", boosted=true, only_friends=false }
+        -- Auto-detect which permanent challenge still has daily Trait Shard cap remaining
+        local ok0, pdata = pcall(function() return lobbyRemotes.playerGet:InvokeServer() end)
+        if not ok0 or not pdata then
+            log("Auto Join: failed to fetch player data for permanent cap check")
+            return false
+        end
+        local pcaps = pdata.caps or {}
+        local chosen, chosenCap = nil, 0
+        for _, pc in ipairs(PERMANENT_CHALLENGES) do
+            local key = permCapKey(pc.world)
+            local current = pcaps[key] or 0
+            if current < pc.cap then
+                chosen    = pc.world
+                chosenCap = pc.cap
+                log("Auto Join: Permanent → " .. pc.world .. " (" .. current .. "/" .. pc.cap .. " Trait Shards today)")
+                break
+            else
+                log("Auto Join: Permanent → " .. pc.world .. " cap full (" .. current .. "/" .. pc.cap .. ")")
+            end
+        end
+        if not chosen then
+            log("Auto Join: Permanent → all daily caps full")
+            return false
+        end
+        NS.permCapKey = permCapKey(chosen)
+        NS.permCapMax = chosenCap
+        config = { world=chosen, act=cfg.act or 1, mode="Challenge", difficulty=cfg.difficulty or "Normal", boosted=true, only_friends=false }
     else
         -- Story, Squadron, Raid
         config = { world=cfg.world, act=cfg.act, mode=cfg.mode, difficulty=cfg.difficulty or "Normal" }
