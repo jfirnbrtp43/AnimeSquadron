@@ -73,6 +73,7 @@ local _defaults = {
     autoPermanent     = false,
     permanentDiff     = "Normal",
     autoBounty        = false,
+    autoBountyTickets = false,
     bountyDiff        = "Normal",
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
@@ -1214,15 +1215,19 @@ local function runBountyLobby(lr)
     if not ok or not pdata then return end
     blist = pdata.bounties or {}
 
-    -- Use a ticket if no bounties remain
+    -- Use a ticket if no bounties remain and the ticket toggle is on
     if #blist == 0 then
-        local ok2, res = pcall(function() return lr.bountiesUseTicket:InvokeServer() end)
-        if ok2 and res then
-            log("Bounty: used a ticket to generate new bounty")
-            ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
-            if ok and pdata then blist = pdata.bounties or {} end
+        if NS.settings.autoBountyTickets then
+            local ok2, res = pcall(function() return lr.bountiesUseTicket:InvokeServer() end)
+            if ok2 and res then
+                log("Bounty: used a ticket to generate new bounty")
+                ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+                if ok and pdata then blist = pdata.bounties or {} end
+            else
+                log("Bounty: no tickets remaining")
+            end
         else
-            log("Bounty: no tickets remaining")
+            log("Bounty: list empty — enable Auto Use Tickets to continue")
         end
     end
 
@@ -1600,7 +1605,9 @@ local function setupGUI()
     -- ── Bounty ────────────────────────────────────────────────────
     local BountyBox = Tabs.AdvFarm:AddLeftGroupbox("Auto Bounty")
     addToggle(BountyBox, "autoBounty", "Auto Bounty",
-        "Auto-accept, farm, and claim bounties. Joins the bounty's world in Normal mode until kills are complete.")
+        "Auto-accept, farm, and claim bounties. Joins the bounty's world until kills are complete.")
+    addToggle(BountyBox, "autoBountyTickets", "Auto Use Tickets",
+        "Use a bounty ticket to refresh the list when all bounties are claimed")
     BountyBox:AddDropdown("bountyDiff", {
         Values   = { "Normal", "Hard" },
         Default  = NS.settings.bountyDiff or "Normal",
