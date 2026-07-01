@@ -1360,27 +1360,48 @@ local function runBountyWatch(remotes)
     NS.bountyWatchGen = (NS.bountyWatchGen or 0) + 1
     local myGen = NS.bountyWatchGen
     local bounty = NS.activeBounty
+    local pending = false
+    local lastProgress = bounty.progress
 
-    while NS.bountyWatchGen == myGen and NS.settings.autoBounty do
-        task.wait(5)
-        local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
-        if ok and pdata then
+    local function checkProgress()
+        if pending then return end
+        pending = true
+        task.delay(0.5, function()
+            pending = false
+            if NS.bountyWatchGen ~= myGen or not NS.settings.autoBounty then return end
+            local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
+            if not ok or not pdata then return end
             for _, b in ipairs(pdata.bounties or {}) do
                 if b.active and b.enemy == bounty.enemy then
-                    log("Bounty: " .. b.progress .. "/" .. b.required .. " kills")
-                    if NS.lblBountyStatus then
-                        NS.lblBountyStatus:SetText(b.enemy .. " " .. b.progress .. "/" .. b.required .. " (" .. b.world .. ")")
+                    if b.progress ~= lastProgress then
+                        lastProgress = b.progress
+                        if NS.lblBountyStatus then
+                            NS.lblBountyStatus:SetText(b.enemy .. " " .. b.progress .. "/" .. b.required .. " (" .. b.world .. ")")
+                        end
+                        log("Bounty: " .. b.progress .. "/" .. b.required)
                     end
                     if b.progress >= b.required then
                         log("Bounty: kill count reached — returning to lobby")
                         pcall(function() remotes.teleport:FireServer() end)
-                        return
                     end
                     break
                 end
             end
-        end
+        end)
     end
+
+    local conn = RS.Remotes.Characters:WaitForChild("destroy", 10)
+    if not conn then return end
+    local evtConn = conn.OnClientEvent:Connect(function()
+        if NS.bountyWatchGen == myGen and NS.settings.autoBounty then
+            checkProgress()
+        end
+    end)
+
+    while NS.bountyWatchGen == myGen and NS.settings.autoBounty do
+        task.wait(1)
+    end
+    evtConn:Disconnect()
 end
 
 local function runCustomAutoPlay(remotes)
