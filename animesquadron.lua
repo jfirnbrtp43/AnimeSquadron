@@ -1291,6 +1291,9 @@ local function setupAutoUpgrade(remotes)
 end
 
 local function runCustomAutoPlay(remotes)
+    NS.customPlayGen = (NS.customPlayGen or 0) + 1
+    local myGen = NS.customPlayGen
+
     local ok, charData = pcall(function() return remotes.charsGet:InvokeServer() end)
     if not ok or not charData then return end
     local slotUnits = {}
@@ -1299,7 +1302,8 @@ local function runCustomAutoPlay(remotes)
             slotUnits[char.index] = char.name
         end
     end
-    while NS.settings.customAutoPlay and NS.inGame do
+
+    while NS.customPlayGen == myGen and NS.settings.customAutoPlay do
         for slot = 1, 6 do
             if NS.settings["customAutoPlaySlot" .. slot] and slotUnits[slot] then
                 pcall(function() remotes.spawn:InvokeServer(slotUnits[slot]) end)
@@ -1331,9 +1335,7 @@ local function setupIngame()
         setupFarmLoop(player, remotes)
         startChallengeReturnTimer(remotes)
         setupAutoUpgrade(remotes)
-        if NS.settings.customAutoPlay then
-            task.spawn(function() runCustomAutoPlay(remotes) end)
-        end
+        task.spawn(function() runCustomAutoPlay(remotes) end)
     end)
 
     if not ok then
