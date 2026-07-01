@@ -215,7 +215,10 @@ NS.webhookTest = function()
             { equipped = true, index = 6, name = "Berserker" },
         },
     }
-    sendWebhookEmbed(buildStageEmbed("Victory!", "GT City", 3, 187, mockPd, "12"))
+    local embed = buildStageEmbed("Victory!", "GT City", 3, 187, mockPd, "12")
+    embed.title = "🧪 TEST — " .. (embed.title or "Stage Result")
+    embed.footer = { text = "This is a test embed from Zeno Hub — not a real stage result" }
+    sendWebhookEmbed(embed)
 end
 
 -- ── State ────────────────────────────────────────────────────────
