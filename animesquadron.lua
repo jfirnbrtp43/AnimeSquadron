@@ -1827,24 +1827,6 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
                 })
             end
 
-            local _teamOpts = {"None"}
-            for i = 1, 10 do table.insert(_teamOpts, "Team " .. i) end
-            local _teamDefault = (entry.team and entry.team > 0) and ("Team " .. entry.team) or "None"
-            modeBox:AddDropdown("join_team_" .. mn, {
-                Values   = _teamOpts,
-                Default  = _teamDefault,
-                Multi    = false,
-                Text     = "Team",
-                Callback = function(Value)
-                    if Value == "None" then
-                        entry.team = 0
-                    else
-                        entry.team = tonumber(Value:match("%d+")) or 0
-                    end
-                    State.saveSettings()
-                end,
-            })
-
             modeBox:AddToggle("join_en_" .. mn, {
                 Text     = "Enable",
                 Default  = entry.enabled == true,
@@ -1981,6 +1963,30 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
         addToggle(TeamsControlBox, "swapTeams", "Swap Teams",
             "Equip the assigned team before joining each mode")
 
+        -- Per-mode team assignment
+        local ModeTeamsBox = Tabs.Teams:AddLeftGroupbox("Mode Teams")
+        local _teamOpts = {"None"}
+        for i = 1, 10 do table.insert(_teamOpts, "Team " .. i) end
+        for _, mn in ipairs({ "Story", "Squadron", "Raid", "Challenge", "Infinite", "Permanent" }) do
+            local _entry
+            for _, m in ipairs(NS.settings.joinModes) do
+                if m.mode == mn then _entry = m; break end
+            end
+            if _entry then
+                local _def = (_entry.team and _entry.team > 0) and ("Team " .. _entry.team) or "None"
+                ModeTeamsBox:AddDropdown("mode_team_" .. mn, {
+                    Values   = _teamOpts,
+                    Default  = _def,
+                    Multi    = false,
+                    Text     = mn,
+                    Callback = function(Value)
+                        _entry.team = (Value == "None") and 0 or (tonumber(Value:match("%d+")) or 0)
+                        State.saveSettings()
+                    end,
+                })
+            end
+        end
+
         local TeamSlotsBox = Tabs.Teams:AddRightGroupbox("Saved Teams")
 
         -- Labels we update when a team is saved
@@ -2000,6 +2006,12 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
         for i = 1, 10 do
             local slot = i
             teamLabels[slot] = TeamSlotsBox:AddLabel("Team " .. slot .. ": " .. teamSummary(slot), true)
+            TeamSlotsBox:AddButton("Reset Team " .. slot, function()
+                if NS.settings.savedTeams then NS.settings.savedTeams[slot] = nil end
+                State.saveSettings()
+                teamLabels[slot]:SetText("Team " .. slot .. ": Empty")
+                log("Teams: cleared team " .. slot)
+            end)
             TeamSlotsBox:AddButton("Save Current → Team " .. slot, function()
                 -- Fetch current equipped units from server
                 local lr = NS._lobbyRemotes
