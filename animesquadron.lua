@@ -75,6 +75,8 @@ local _defaults = {
     autoBounty        = false,
     autoBountyTickets = false,
     bountyDiff        = "Normal",
+    savedTeams        = {},   -- array[1..10] of {name, units=[{id,name,slot}]}
+    swapTeams         = false,
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
     webhookOnVictory  = false,
@@ -82,12 +84,12 @@ local _defaults = {
     webhookOnEvoReady = false,
     autoJoin          = false,
     joinModes         = {
-        { mode="Story",     enabled=false, priority=1, world="GT City",            act=1, difficulty="Normal" },
-        { mode="Squadron",  enabled=false, priority=2, world="GT City",            act=1, difficulty="Normal" },
-        { mode="Raid",      enabled=false, priority=3, world="GT City",            act=1, difficulty="Normal" },
-        { mode="Challenge", enabled=false, priority=4, challengeType="30m" },
-        { mode="Infinite",  enabled=false, priority=5, boosted=false },
-        { mode="Permanent", enabled=false, priority=6, world="Katakara Bridge",    act=1, difficulty="Normal" },
+        { mode="Story",     enabled=false, priority=1, world="GT City",            act=1, difficulty="Normal", team=0 },
+        { mode="Squadron",  enabled=false, priority=2, world="GT City",            act=1, difficulty="Normal", team=0 },
+        { mode="Raid",      enabled=false, priority=3, world="GT City",            act=1, difficulty="Normal", team=0 },
+        { mode="Challenge", enabled=false, priority=4, challengeType="30m",                                   team=0 },
+        { mode="Infinite",  enabled=false, priority=5, boosted=false,                                         team=0 },
+        { mode="Permanent", enabled=false, priority=6, world="Katakara Bridge",    act=1, difficulty="Normal", team=0 },
     },
 }
 for k, v in pairs(_defaults) do
@@ -240,13 +242,14 @@ function State.load()
             end
         end
     end
-    -- Migrate joinModes from priority → enabled (one-time upgrade)
+    -- Migrate joinModes: priority→enabled, add team field
     if type(NS.settings.joinModes) == "table" then
         for _, m in ipairs(NS.settings.joinModes) do
             if m.enabled == nil then
                 m.enabled = (m.priority ~= nil and m.priority > 0)
                 m.priority = nil
             end
+            if m.team == nil then m.team = 0 end
         end
     end
 end
@@ -446,6 +449,8 @@ local function getRemotes()
         upgrade     = chars:WaitForChild("upgrade",      10),  -- RemoteFunction(name) → bool, newLevel, data
         spawn       = chars:WaitForChild("spawn",        10),  -- RemoteFunction(unitName) → bool, msg
         charsGet    = chars:WaitForChild("get",          10),  -- RemoteFunction() → {characters, autoplay, stats}
+        equip       = chars:WaitForChild("equip",        10),  -- RemoteFunction(id, slot) → bool
+        unequipAll  = chars:WaitForChild("unequip_all",  10),  -- RemoteFunction() → ?
         playersGet  = RS:WaitForChild("Remotes",10):WaitForChild("Players",10):WaitForChild("get",10),  -- RemoteFunction() → playerData
     }
 end
@@ -821,9 +826,12 @@ local function getLobbyRemotes()
         playerGet     = rem  :WaitForChild("Player",          10):WaitForChild("get",    10),  -- () → full playerData incl. items + characters
         craftGear     = rem  :WaitForChild("Crafting",        10):WaitForChild("craft",  10),  -- (gearName, qty) → bool, playerData
         -- Bounties
-        bountiesAccept    = rem:WaitForChild("Bounties", 10):WaitForChild("accept",     10),  -- (index) → bool
-        bountiesClaim     = rem:WaitForChild("Bounties", 10):WaitForChild("claim",      10),  -- (index) → bool
-        bountiesUseTicket = rem:WaitForChild("Bounties", 10):WaitForChild("use_ticket", 10),  -- () → bool
+        bountiesAccept    = rem:WaitForChild("Bounties",    10):WaitForChild("accept",     10),  -- (index) → bool
+        bountiesClaim     = rem:WaitForChild("Bounties",    10):WaitForChild("claim",      10),  -- (index) → bool
+        bountiesUseTicket = rem:WaitForChild("Bounties",    10):WaitForChild("use_ticket", 10),  -- () → bool
+        -- Teams (equip characters in lobby)
+        equip             = rem:WaitForChild("Characters",  10):WaitForChild("equip",      10),  -- (id, slot) → bool
+        unequipAll        = rem:WaitForChild("Characters",  10):WaitForChild("unequip_all",10),  -- () → ?
     }
 end
 
@@ -928,6 +936,18 @@ local function tryJoinMode(lobbyRemotes, cfg)
     return true
 end
 
+local function equipTeam(remotes, teamSlot)
+    local team = NS.settings.savedTeams and NS.settings.savedTeams[teamSlot]
+    if not team or not team.units or #team.units == 0 then return end
+    pcall(function() remotes.unequipAll:InvokeServer() end)
+    task.wait(0.3)
+    for _, u in ipairs(team.units) do
+        pcall(function() remotes.equip:InvokeServer(u.id, u.slot) end)
+        task.wait(0.1)
+    end
+    log("Teams: equipped " .. (team.name or ("Team " .. teamSlot)))
+end
+
 local function attemptAutoJoin(lobbyRemotes)
     local enabled = {}
     for _, cfg in ipairs(NS.settings.joinModes) do
@@ -954,6 +974,9 @@ local function attemptAutoJoin(lobbyRemotes)
     table.sort(enabled, function(a, b) return (a.priority or 99) < (b.priority or 99) end)
     for _, cfg in ipairs(enabled) do
         log("Auto Join: trying " .. cfg.mode)
+        if NS.settings.swapTeams and (cfg.team or 0) > 0 then
+            equipTeam(lobbyRemotes, cfg.team)
+        end
         if tryJoinMode(lobbyRemotes, cfg) then
             log("Auto Join: queued for " .. cfg.mode)
             return true
@@ -1276,6 +1299,7 @@ end
 local function setupLobby()
     local ok, err = pcall(function()
         local lobbyRemotes = getLobbyRemotes()
+        NS._lobbyRemotes = lobbyRemotes
 
         NS.autoJoinGen = (NS.autoJoinGen or 0) + 1
         local myGen = NS.autoJoinGen
@@ -1503,6 +1527,7 @@ local function setupGUI()
         Lobby   = Window:AddTab("Lobby"),
         Play    = Window:AddTab("Play"),
         AdvFarm = Window:AddTab("Adv Farm"),
+        Teams   = Window:AddTab("Teams"),
         Webhook = Window:AddTab("Webhook"),
         Info    = Window:AddTab("Info"),
     }
@@ -1802,6 +1827,24 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
                 })
             end
 
+            local _teamOpts = {"None"}
+            for i = 1, 10 do table.insert(_teamOpts, "Team " .. i) end
+            local _teamDefault = (entry.team and entry.team > 0) and ("Team " .. entry.team) or "None"
+            modeBox:AddDropdown("join_team_" .. mn, {
+                Values   = _teamOpts,
+                Default  = _teamDefault,
+                Multi    = false,
+                Text     = "Team",
+                Callback = function(Value)
+                    if Value == "None" then
+                        entry.team = 0
+                    else
+                        entry.team = tonumber(Value:match("%d+")) or 0
+                    end
+                    State.saveSettings()
+                end,
+            })
+
             modeBox:AddToggle("join_en_" .. mn, {
                 Text     = "Enable",
                 Default  = entry.enabled == true,
@@ -1931,6 +1974,62 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
             State.saveSettings()
         end,
     })
+
+    -- ── Teams ────────────────────────────────────────────────────
+    do
+        local TeamsControlBox = Tabs.Teams:AddLeftGroupbox("Settings")
+        addToggle(TeamsControlBox, "swapTeams", "Swap Teams",
+            "Equip the assigned team before joining each mode")
+
+        local TeamSlotsBox = Tabs.Teams:AddRightGroupbox("Saved Teams")
+
+        -- Labels we update when a team is saved
+        local teamLabels = {}
+
+        local function teamSummary(slot)
+            local t = NS.settings.savedTeams and NS.settings.savedTeams[slot]
+            if not t or not t.units or #t.units == 0 then return "Empty" end
+            local parts = {}
+            table.sort(t.units, function(a, b) return (a.slot or 0) < (b.slot or 0) end)
+            for _, u in ipairs(t.units) do
+                table.insert(parts, "[" .. u.slot .. "] " .. u.name)
+            end
+            return table.concat(parts, "  ")
+        end
+
+        for i = 1, 10 do
+            local slot = i
+            teamLabels[slot] = TeamSlotsBox:AddLabel("Team " .. slot .. ": " .. teamSummary(slot), true)
+            TeamSlotsBox:AddButton("Save Current → Team " .. slot, function()
+                -- Fetch current equipped units from server
+                local lr = NS._lobbyRemotes
+                if not lr then
+                    log("Teams: must be in lobby to save a team")
+                    return
+                end
+                local ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+                if not ok or not pdata then
+                    log("Teams: failed to fetch player data")
+                    return
+                end
+                local units = {}
+                for _, char in pairs(pdata.characters or {}) do
+                    if char.equipped and char.index then
+                        table.insert(units, { id = char.id, name = char.name, slot = char.index })
+                    end
+                end
+                if #units == 0 then
+                    log("Teams: no units currently equipped")
+                    return
+                end
+                if not NS.settings.savedTeams then NS.settings.savedTeams = {} end
+                NS.settings.savedTeams[slot] = { name = "Team " .. slot, units = units }
+                State.saveSettings()
+                teamLabels[slot]:SetText("Team " .. slot .. ": " .. teamSummary(slot))
+                log("Teams: saved team " .. slot .. " (" .. #units .. " units)")
+            end)
+        end
+    end
 
     -- ── Webhook ───────────────────────────────────────────────────
     local WebhookConfigBox = Tabs.Webhook:AddLeftGroupbox("Config")
