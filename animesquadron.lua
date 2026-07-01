@@ -967,13 +967,15 @@ local function runAutoSell(lr)
     if not NS.settings.autoSell or #NS.settings.autoSell == 0 then return end
     local desired = {}
     for _, t in ipairs(NS.settings.autoSell) do desired[t] = true end
-    -- Each InvokeServer(type) toggles that rarity and returns the new state (bool).
-    -- Toggle until the returned state matches what we want (max 2 attempts).
+    -- Fetch current server state so we only toggle rarities that need to change.
+    local ok0, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+    if not ok0 or not pdata then return end
+    local current = {}
+    for _, t in ipairs(pdata.auto_sell or {}) do current[t] = true end
     for _, t in ipairs(SELL_TYPES) do
         local want = desired[t] == true
-        for _ = 1, 2 do
-            local ok, state = pcall(function() return lr.autoSell:InvokeServer(t) end)
-            if ok and state == want then break end
+        if want ~= (current[t] == true) then
+            pcall(function() lr.autoSell:InvokeServer(t) end)
         end
     end
 end
@@ -1005,18 +1007,24 @@ local function runShopBuy(lr, shopId, selectedItems)
     end
     for _, itemName in ipairs(selectedItems) do
         local item = shopData[itemName]
-        if item and item.max and item.max > 0 then
-            local ok2, success, msg = pcall(function()
-                return lr.shopsBuy:InvokeServer(itemName, shopId, item.max)
-            end)
-            if ok2 and success then
-                log("Shop " .. shopId .. ": bought x" .. item.max .. " " .. itemName)
-            elseif ok2 then
-                log("Shop " .. shopId .. ": " .. itemName .. " — " .. tostring(msg))
-            end
-            task.wait(0.3)
-        else
+        if not item then
             log("Shop " .. shopId .. ": " .. itemName .. " not available")
+        else
+            local bought = 0
+            while bought < (item.max or 1) do
+                local ok2, success = pcall(function()
+                    return lr.shopsBuy:InvokeServer(itemName, shopId, 1)
+                end)
+                if ok2 and success then
+                    bought = bought + 1
+                    task.wait(0.2)
+                else
+                    break
+                end
+            end
+            if bought > 0 then
+                log("Shop " .. shopId .. ": bought x" .. bought .. " " .. itemName)
+            end
         end
     end
 end
