@@ -76,6 +76,7 @@ local _defaults = {
     bountyDiff        = "Normal",
     savedTeams        = {},   -- array[1..10] of {name, units=[{id,name,slot}]}
     swapTeams         = false,
+    yenCap            = 0,    -- cached from lobby Perks panel; 0 = unknown yet
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
     webhookOnVictory  = false,
@@ -99,6 +100,22 @@ end
 
 local function log(msg)
     print(LOG_PREFIX .. " " .. tostring(msg))
+end
+
+-- Parses abbreviated currency text like "11.5K", "2.17K", "1M" into a plain number.
+-- Strips any rich-text font tags first since these labels are colorized.
+local function parseAbbrevNumber(text)
+    if not text then return nil end
+    local clean = text:gsub("<[^>]->", ""):gsub(",", "")
+    local num, suffix = clean:match("([%d%.]+)%s*([KkMmBb]?)")
+    num = tonumber(num)
+    if not num then return nil end
+    suffix = (suffix or ""):upper()
+    if suffix == "K" then num = num * 1000
+    elseif suffix == "M" then num = num * 1000000
+    elseif suffix == "B" then num = num * 1000000000
+    end
+    return num
 end
 
 -- ── Webhook ──────────────────────────────────────────────────────
@@ -1296,12 +1313,29 @@ local function runBountyLobby(lr)
     end
 end
 
+local function cacheYenCap()
+    local ok, text = pcall(function()
+        return Players.LocalPlayer.PlayerGui.Menus.Perks.Yen_Max.amount.Text
+    end)
+    if not ok or not text then return end
+    local clean = text:gsub("<[^>]->", "")
+    local current = clean:match("^(.-)%s*>") or clean
+    local cap = parseAbbrevNumber(current)
+    if cap then
+        NS.settings.yenCap = cap
+        State.saveSettings()
+        log("Yen cap cached: " .. cap)
+        if NS.lblYenCap then NS.lblYenCap:SetText("Yen Cap: " .. cap) end
+    end
+end
+
 local function runLobbyActions(lr)
     runEvoOrchestrator(lr)
     runGearOrchestrator(lr)  -- set farm stages before auto-join loop starts
     task.wait(1.5)
     runClaim(lr)
     runAutoSell(lr)
+    cacheYenCap()
     if NS.settings.autoRaidShop then runShopBuy(lr, "gt_city_raid", NS.settings.raidShopItems) end
     if NS.settings.autoMerchant then runShopBuy(lr, "merchant",     NS.settings.merchantItems)  end
     if NS.settings.autoBounty   then runBountyLobby(lr) end
@@ -1352,6 +1386,15 @@ local function setupLobby()
     if not ok then log("Lobby setup error: " .. tostring(err)) end
 end
 
+-- Reads the live in-game Yen balance off the HUD (Hotbar.Base.Money).
+local function getLiveYen()
+    local ok, text = pcall(function()
+        return Players.LocalPlayer.PlayerGui.Hotbar.Base.Money.Text
+    end)
+    if not ok or not text then return nil end
+    return parseAbbrevNumber(text)
+end
+
 -- ── Auto Upgrade ─────────────────────────────────────────────────
 local function setupAutoUpgrade(remotes)
     NS.autoUpgradeGen = (NS.autoUpgradeGen or 0) + 1
@@ -1359,6 +1402,7 @@ local function setupAutoUpgrade(remotes)
 
     task.spawn(function()
         while NS.autoUpgradeGen == myGen do
+            local outOfYen = false
             if NS.settings.autoUpgrade then
                 local ok, data = pcall(function() return remotes.playersGet:InvokeServer() end)
                 if ok and data then
@@ -1379,19 +1423,34 @@ local function setupAutoUpgrade(remotes)
 
                     local anyUpgraded = false
                     if NS.settings.upgradeMode == "max" then
-                        -- Fully upgrade highest-priority slot before moving to next
+                        -- Fully upgrade highest-priority slot before moving to next.
+                        -- "Not enough Yen" must stop the whole pass — otherwise a cheaper
+                        -- lower-priority slot silently absorbs the spend instead. Exception:
+                        -- if we're already holding our max Yen cap and it still fails, the
+                        -- upgrade costs more than we can ever hold — skip that slot instead
+                        -- of waiting forever for currency that can never accumulate.
                         for _, s in ipairs(slots) do
                             if NS.autoUpgradeGen ~= myGen then break end
                             local didUpgrade = true
                             while didUpgrade and NS.autoUpgradeGen == myGen and NS.settings.autoUpgrade do
-                                local ok2, success = pcall(function() return remotes.upgrade:InvokeServer(s.name) end)
+                                local ok2, success, msg = pcall(function() return remotes.upgrade:InvokeServer(s.name) end)
                                 if ok2 and success then
                                     anyUpgraded = true
                                     task.wait(0.5)
                                 else
                                     didUpgrade = false
+                                    if ok2 and type(msg) == "string" and msg:lower():find("yen") then
+                                        local liveYen = getLiveYen()
+                                        local cap = NS.settings.yenCap or 0
+                                        if liveYen and cap > 0 and liveYen >= cap * 0.98 then
+                                            log("Upgrade: " .. s.name .. " costs more than Yen cap (" .. cap .. ") — skipping")
+                                        else
+                                            outOfYen = true
+                                        end
+                                    end
                                 end
                             end
+                            if outOfYen then break end
                         end
                     else
                         -- "cheapest": one upgrade per slot per pass in priority order
@@ -1404,7 +1463,9 @@ local function setupAutoUpgrade(remotes)
                     end
                 end
             end
-            task.wait(0.1)
+            -- Back off when blocked purely on Yen — no point hammering the server
+            -- every 0.1s while waiting for currency to accumulate.
+            task.wait(outOfYen and 3 or 0.1)
         end
     end)
     log("Auto Upgrade loop active")
@@ -1673,6 +1734,7 @@ local function setupGUI()
             State.saveSettings()
         end,
     })
+    NS.lblYenCap = UpgradeBox:AddLabel("Yen Cap: " .. ((NS.settings.yenCap or 0) > 0 and tostring(NS.settings.yenCap) or "unknown"), true)
 
     local SlotsBox = Tabs.Play:AddRightGroupbox("Slot Priority")
     for i = 1, 6 do
