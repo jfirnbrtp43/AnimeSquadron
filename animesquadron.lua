@@ -820,8 +820,9 @@ local function getLobbyRemotes()
         playerGet     = rem  :WaitForChild("Player",          10):WaitForChild("get",    10),  -- () → full playerData incl. items + characters
         craftGear     = rem  :WaitForChild("Crafting",        10):WaitForChild("craft",  10),  -- (gearName, qty) → bool, playerData
         -- Bounties
-        bountiesAccept = rem:WaitForChild("Bounties", 10):WaitForChild("accept", 10),  -- (index) → bool
-        bountiesClaim  = rem:WaitForChild("Bounties", 10):WaitForChild("claim",  10),  -- (index) → bool
+        bountiesAccept    = rem:WaitForChild("Bounties", 10):WaitForChild("accept",     10),  -- (index) → bool
+        bountiesClaim     = rem:WaitForChild("Bounties", 10):WaitForChild("claim",      10),  -- (index) → bool
+        bountiesUseTicket = rem:WaitForChild("Bounties", 10):WaitForChild("use_ticket", 10),  -- () → bool
     }
 end
 
@@ -1213,6 +1214,18 @@ local function runBountyLobby(lr)
     if not ok or not pdata then return end
     blist = pdata.bounties or {}
 
+    -- Use a ticket if no bounties remain
+    if #blist == 0 then
+        local ok2, res = pcall(function() return lr.bountiesUseTicket:InvokeServer() end)
+        if ok2 and res then
+            log("Bounty: used a ticket to generate new bounty")
+            ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+            if ok and pdata then blist = pdata.bounties or {} end
+        else
+            log("Bounty: no tickets remaining")
+        end
+    end
+
     -- Accept first available if none are active
     local activeBounty = nil
     for _, b in ipairs(blist) do
@@ -1372,17 +1385,13 @@ local function runBountyWatch(remotes)
     end
     if not bounty then return end
     NS.activeBounty = bounty
-    local pending = false
     local lastProgress = bounty.progress
+    local firstCheck = true
 
-    local function checkProgress()
-        if pending then return end
-        pending = true
-        task.delay(0.5, function()
-            pending = false
-            if NS.bountyWatchGen ~= myGen or not NS.settings.autoBounty then return end
-            local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
-            if not ok or not pdata then return end
+    while NS.bountyWatchGen == myGen and NS.settings.autoBounty do
+        if firstCheck then firstCheck = false else task.wait(3) end
+        local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
+        if ok and pdata then
             for _, b in ipairs(pdata.bounties or {}) do
                 if b.active and b.enemy == bounty.enemy then
                     if b.progress ~= lastProgress then
@@ -1395,25 +1404,13 @@ local function runBountyWatch(remotes)
                     if b.progress >= b.required then
                         log("Bounty: kill count reached — returning to lobby")
                         pcall(function() remotes.teleport:FireServer() end)
+                        return
                     end
                     break
                 end
             end
-        end)
-    end
-
-    local conn = RS.Remotes.Characters:WaitForChild("destroy", 10)
-    if not conn then return end
-    local evtConn = conn.OnClientEvent:Connect(function()
-        if NS.bountyWatchGen == myGen and NS.settings.autoBounty then
-            checkProgress()
         end
-    end)
-
-    while NS.bountyWatchGen == myGen and NS.settings.autoBounty do
-        task.wait(1)
     end
-    evtConn:Disconnect()
 end
 
 local function runCustomAutoPlay(remotes)
