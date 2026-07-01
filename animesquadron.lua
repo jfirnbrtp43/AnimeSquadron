@@ -1,6 +1,5 @@
--- AnimeSquadron | Foundation + EndScreen + Gameplay Toggles
--- Drop this file in your executor's autoexec folder.
--- State is persisted to AnimeSquadron/state.json in the executor workspace.
+-- Zeno Hub | Anime Squadron
+-- UI: LinoriaLib — MIT License, Copyright (c) 2021 violin-suzutsuki
 
 local LOBBY_PLACE_ID  = 71132543521245
 local INGAME_PLACE_ID = 91255392593879
