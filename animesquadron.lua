@@ -72,6 +72,8 @@ local _defaults = {
     gearTargets       = {},    -- gear piece names to farm materials for
     autoPermanent     = false,
     permanentDiff     = "Normal",
+    autoBounty        = false,
+    bountyDiff        = "Normal",
     webhookUrl        = "",    -- Discord webhook URL; empty = disabled
     webhookUserId     = "",    -- Discord User ID to ping on evo notifications; empty = no ping
     webhookOnVictory  = false,
@@ -817,6 +819,9 @@ local function getLobbyRemotes()
         -- Evo / Gear
         playerGet     = rem  :WaitForChild("Player",          10):WaitForChild("get",    10),  -- () → full playerData incl. items + characters
         craftGear     = rem  :WaitForChild("Crafting",        10):WaitForChild("craft",  10),  -- (gearName, qty) → bool, playerData
+        -- Bounties
+        bountiesAccept = rem:WaitForChild("Bounties", 10):WaitForChild("accept", 10),  -- (index) → bool
+        bountiesClaim  = rem:WaitForChild("Bounties", 10):WaitForChild("claim",  10),  -- (index) → bool
     }
 end
 
@@ -929,6 +934,16 @@ local function attemptAutoJoin(lobbyRemotes)
     -- Auto Permanent injects itself independently of the Lobby Permanent toggle
     if NS.settings.autoPermanent then
         table.insert(enabled, { mode="Permanent", priority=6 })
+    end
+    -- Auto Bounty injects the active bounty's world as a Normal mode join
+    if NS.settings.autoBounty and NS.activeBounty and NS.activeBounty.progress < NS.activeBounty.required then
+        table.insert(enabled, {
+            mode       = "Normal",
+            world      = NS.activeBounty.world,
+            act        = 1,
+            difficulty = NS.settings.bountyDiff or "Normal",
+            priority   = 7,
+        })
     end
     if #enabled == 0 then
         log("Auto Join: no modes enabled")
@@ -1178,6 +1193,55 @@ local function updatePermStatus(lr)
     NS.lblPermStatus:SetText(table.concat(parts, "  |  "))
 end
 
+local function runBountyLobby(lr)
+    local ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+    if not ok or not pdata then return end
+    local blist = pdata.bounties or {}
+
+    -- Claim any completed active bounty
+    for i, b in ipairs(blist) do
+        if b.active and b.progress >= b.required then
+            local ok2, res = pcall(function() return lr.bountiesClaim:InvokeServer(i) end)
+            if ok2 and res then
+                log("Bounty: claimed " .. b.enemy .. " (" .. b.difficulty .. ")")
+            end
+        end
+    end
+
+    -- Re-fetch after claiming
+    ok, pdata = pcall(function() return lr.playerGet:InvokeServer() end)
+    if not ok or not pdata then return end
+    blist = pdata.bounties or {}
+
+    -- Accept first available if none are active
+    local activeBounty = nil
+    for _, b in ipairs(blist) do
+        if b.active then activeBounty = b break end
+    end
+    if not activeBounty and #blist > 0 then
+        local ok2, res = pcall(function() return lr.bountiesAccept:InvokeServer(1) end)
+        if ok2 and res then
+            activeBounty = blist[1]
+            log("Bounty: accepted " .. activeBounty.enemy .. " in " .. activeBounty.world)
+        end
+    end
+
+    -- Cache active bounty for attemptAutoJoin
+    NS.activeBounty = activeBounty
+    if NS.lblBountyStatus then
+        if activeBounty then
+            NS.lblBountyStatus:SetText(activeBounty.enemy .. " " .. activeBounty.progress .. "/" .. activeBounty.required .. " (" .. activeBounty.world .. ")")
+        else
+            NS.lblBountyStatus:SetText("No bounties available")
+        end
+    end
+    if activeBounty then
+        log("Bounty: " .. activeBounty.enemy .. " " .. activeBounty.progress .. "/" .. activeBounty.required .. " — " .. activeBounty.world)
+    else
+        log("Bounty: no bounties available")
+    end
+end
+
 local function runLobbyActions(lr)
     runEvoOrchestrator(lr)
     runGearOrchestrator(lr)  -- set farm stages before auto-join loop starts
@@ -1186,6 +1250,7 @@ local function runLobbyActions(lr)
     runAutoSell(lr)
     if NS.settings.autoRaidShop then runShopBuy(lr, "gt_city_raid", NS.settings.raidShopItems) end
     if NS.settings.autoMerchant then runShopBuy(lr, "merchant",     NS.settings.merchantItems)  end
+    if NS.settings.autoBounty   then runBountyLobby(lr) end
     updatePermStatus(lr)
 end
 
@@ -1472,6 +1537,22 @@ local function setupGUI()
         end,
     })
     NS.lblPermStatus = PermBox:AddLabel("Status: —", true)
+
+    -- ── Bounty ────────────────────────────────────────────────────
+    local BountyBox = Tabs.AdvFarm:AddLeftGroupbox("Auto Bounty")
+    addToggle(BountyBox, "autoBounty", "Auto Bounty",
+        "Auto-accept, farm, and claim bounties. Joins the bounty's world in Normal mode until kills are complete.")
+    BountyBox:AddDropdown("bountyDiff", {
+        Values   = { "Normal", "Hard" },
+        Default  = NS.settings.bountyDiff or "Normal",
+        Multi    = false,
+        Text     = "Difficulty",
+        Callback = function(Value)
+            NS.settings.bountyDiff = Value
+            State.saveSettings()
+        end,
+    })
+    NS.lblBountyStatus = BountyBox:AddLabel("Status: —", true)
 
     -- ── Upgrade ───────────────────────────────────────────────────
     local UpgradeBox = Tabs.Play:AddLeftGroupbox("Auto Upgrade")
