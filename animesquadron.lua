@@ -1554,6 +1554,7 @@ local function setupGUI()
 
     -- ── Custom Auto Play ─────────────────────────────────────────────
     local CapBox = Tabs.Play:AddRightGroupbox("Custom Auto Play")
+    CapBox:AddLabel("Disable the game's Auto Play before enabling this", true)
     addToggle(CapBox, "customAutoPlay", "Enable", "Spawn only selected hotbar slots instead of using game autoplay")
     for i = 1, 6 do
         addToggle(CapBox, "customAutoPlaySlot" .. i, "Slot " .. i, "Include hotbar slot " .. i .. " in custom auto play")
