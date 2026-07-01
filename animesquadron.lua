@@ -935,10 +935,10 @@ local function attemptAutoJoin(lobbyRemotes)
     if NS.settings.autoPermanent then
         table.insert(enabled, { mode="Permanent", priority=6 })
     end
-    -- Auto Bounty injects the active bounty's world as a Normal mode join
+    -- Auto Bounty injects the active bounty's world as a Story mode join
     if NS.settings.autoBounty and NS.activeBounty and NS.activeBounty.progress < NS.activeBounty.required then
         table.insert(enabled, {
-            mode       = "Normal",
+            mode       = "Story",
             world      = NS.activeBounty.world,
             act        = 1,
             difficulty = NS.settings.bountyDiff or "Normal",
