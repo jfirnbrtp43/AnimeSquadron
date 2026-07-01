@@ -1356,10 +1356,22 @@ local function setupAutoUpgrade(remotes)
 end
 
 local function runBountyWatch(remotes)
-    if not NS.settings.autoBounty or not NS.activeBounty then return end
+    if not NS.settings.autoBounty then return end
     NS.bountyWatchGen = (NS.bountyWatchGen or 0) + 1
     local myGen = NS.bountyWatchGen
+
+    -- Fetch active bounty directly in case we re-executed in-game
     local bounty = NS.activeBounty
+    if not bounty then
+        local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
+        if ok and pdata then
+            for _, b in ipairs(pdata.bounties or {}) do
+                if b.active then bounty = b; break end
+            end
+        end
+    end
+    if not bounty then return end
+    NS.activeBounty = bounty
     local pending = false
     local lastProgress = bounty.progress
 
