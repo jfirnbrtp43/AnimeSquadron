@@ -36,6 +36,13 @@ local _defaults = {
     autoReplay        = false,
     autoLeave         = false,
     challengeReturn30 = false,
+    customAutoPlay      = false,
+    customAutoPlaySlot1 = false,
+    customAutoPlaySlot2 = false,
+    customAutoPlaySlot3 = false,
+    customAutoPlaySlot4 = false,
+    customAutoPlaySlot5 = false,
+    customAutoPlaySlot6 = false,
     autoUpgrade       = false,
     upgradeMode       = "max",   -- "max" | "cheapest"
     upgradeSlots      = {
@@ -434,6 +441,8 @@ local function getRemotes()
         changeSpeed = game_:WaitForChild("change_speed", 10),  -- RemoteFunction(number) → bool, msg
         autoplay    = chars:WaitForChild("autoplay",     10),  -- RemoteFunction() → bool new-state
         upgrade     = chars:WaitForChild("upgrade",      10),  -- RemoteFunction(name) → bool, newLevel, data
+        spawn       = chars:WaitForChild("spawn",        10),  -- RemoteFunction(unitName) → bool, msg
+        charsGet    = chars:WaitForChild("get",          10),  -- RemoteFunction() → {characters, autoplay, stats}
         playersGet  = RS:WaitForChild("Remotes",10):WaitForChild("Players",10):WaitForChild("get",10),  -- RemoteFunction() → playerData
     }
 end
@@ -1281,6 +1290,26 @@ local function setupAutoUpgrade(remotes)
     log("Auto Upgrade loop active")
 end
 
+local function runCustomAutoPlay(remotes)
+    local ok, charData = pcall(function() return remotes.charsGet:InvokeServer() end)
+    if not ok or not charData then return end
+    local slotUnits = {}
+    for _, char in pairs(charData.characters or {}) do
+        if char.equipped and char.index then
+            slotUnits[char.index] = char.name
+        end
+    end
+    while NS.settings.customAutoPlay and NS.inGame do
+        for slot = 1, 6 do
+            if NS.settings["customAutoPlaySlot" .. slot] and slotUnits[slot] then
+                pcall(function() remotes.spawn:InvokeServer(slotUnits[slot]) end)
+                task.wait(0.1)
+            end
+        end
+        task.wait(0.3)
+    end
+end
+
 -- ── Ingame setup ─────────────────────────────────────────────────
 local function setupIngame()
     local player = Players.LocalPlayer
@@ -1302,6 +1331,9 @@ local function setupIngame()
         setupFarmLoop(player, remotes)
         startChallengeReturnTimer(remotes)
         setupAutoUpgrade(remotes)
+        if NS.settings.customAutoPlay then
+            task.spawn(function() runCustomAutoPlay(remotes) end)
+        end
     end)
 
     if not ok then
@@ -1363,6 +1395,13 @@ local function setupGUI()
     addToggle(FarmBox, "autoNext",     "Auto Next",     "Advance to next act on victory")
     addToggle(FarmBox, "autoReplay",   "Auto Replay",   "Replay the same act on victory")
     addToggle(FarmBox, "autoLeave",    "Auto Leave",    "Teleport to lobby if no other action fires")
+
+    -- ── Custom Auto Play ─────────────────────────────────────────────
+    local CapBox = Tabs.Play:AddRightGroupbox("Custom Auto Play")
+    addToggle(CapBox, "customAutoPlay", "Enable", "Spawn only selected hotbar slots instead of using game autoplay")
+    for i = 1, 6 do
+        addToggle(CapBox, "customAutoPlaySlot" .. i, "Slot " .. i, "Include hotbar slot " .. i .. " in custom auto play")
+    end
 
     local FarmMiscBox = Tabs.Play:AddRightGroupbox("Misc")
     addToggle(FarmMiscBox, "challengeReturn30", "30-min Challenge Return", "Leave to lobby at XX:00 and XX:30 for challenge reset")
