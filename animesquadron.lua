@@ -53,9 +53,9 @@ local _defaults = {
     summonBanner      = "Basic Banner",  -- "Basic Banner" | "Selection Banner"
     summonAmount      = 1,       -- 1 or 10
     autoRaidShop      = false,
-    raidShopBuy       = {},      -- { ["Item Name"] = maxAmount }
+    raidShopItems     = {},      -- array of item names to buy from raid shop
     autoMerchant      = false,
-    merchantBuy       = {},      -- { ["Item Name"] = maxAmount }
+    merchantItems     = {},      -- array of item names to buy from merchant
     autoEvo           = false,
     evoTargets        = {},    -- unit names to awaken in priority order: {"Goki (SSJ4)", "Caska"}
     autoGear          = false,
@@ -996,20 +996,27 @@ local function runAutoSummon(lr)
     if total > 0 then log("Summon: " .. total .. "x on " .. banner) end
 end
 
-local function runShopBuy(lr, shopId, itemTable)
-    if not itemTable or not next(itemTable) then return end
+local function runShopBuy(lr, shopId, selectedItems)
+    if not selectedItems or #selectedItems == 0 then return end
     local ok, shopData = pcall(function() return lr.shopsGet:InvokeServer(shopId) end)
-    if not ok or not shopData then return end
-    for itemName, wantAmt in pairs(itemTable) do
-        if wantAmt > 0 and shopData[itemName] then
+    if not ok or not shopData then
+        log("Shop " .. shopId .. ": failed to fetch data")
+        return
+    end
+    for _, itemName in ipairs(selectedItems) do
+        local item = shopData[itemName]
+        if item and item.max and item.max > 0 then
             local ok2, success, msg = pcall(function()
-                return lr.shopsBuy:InvokeServer(itemName, shopId, wantAmt)
+                return lr.shopsBuy:InvokeServer(itemName, shopId, item.max)
             end)
             if ok2 and success then
-                log("Shop " .. shopId .. ": bought " .. wantAmt .. "x " .. itemName)
+                log("Shop " .. shopId .. ": bought x" .. item.max .. " " .. itemName)
             elseif ok2 then
                 log("Shop " .. shopId .. ": " .. itemName .. " — " .. tostring(msg))
             end
+            task.wait(0.3)
+        else
+            log("Shop " .. shopId .. ": " .. itemName .. " not available")
         end
     end
 end
@@ -1154,13 +1161,13 @@ end
 
 local function runLobbyActions(lr)
     runEvoOrchestrator(lr)
-    runGearOrchestrator(lr)  -- run first so farm stages are set before autoJoin loop starts
+    runGearOrchestrator(lr)  -- set farm stages before auto-join loop starts
     task.wait(1.5)
     runClaim(lr)
     runAutoSell(lr)
-    if NS.settings.autoRaidShop  then runShopBuy(lr, "gt_city_raid", NS.settings.raidShopBuy)  end
-    if NS.settings.autoMerchant  then runShopBuy(lr, "merchant",     NS.settings.merchantBuy)   end
-    task.spawn(function() updatePermStatus(lr) end)
+    if NS.settings.autoRaidShop then runShopBuy(lr, "gt_city_raid", NS.settings.raidShopItems) end
+    if NS.settings.autoMerchant then runShopBuy(lr, "merchant",     NS.settings.merchantItems)  end
+    updatePermStatus(lr)
 end
 
 -- ── Lobby setup ──────────────────────────────────────────────────
@@ -1171,7 +1178,7 @@ local function setupLobby()
         NS.autoJoinGen = (NS.autoJoinGen or 0) + 1
         local myGen = NS.autoJoinGen
 
-        task.spawn(function() runLobbyActions(lobbyRemotes) end)
+        runLobbyActions(lobbyRemotes)
 
         -- Summon loop: runs continuously while autoSummon is enabled
         NS.summonGen = (NS.summonGen or 0) + 1
@@ -1186,7 +1193,6 @@ local function setupLobby()
         end)
 
         task.spawn(function()
-            task.wait(3)  -- let runLobbyActions finish before first join attempt
             while NS.autoJoinGen == myGen do
                 -- Re-run orchestrators every loop so enabling toggles mid-session works
                 runEvoOrchestrator(lobbyRemotes)
@@ -1674,8 +1680,40 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
     })
 
     local ShopsBox = Tabs.Lobby:AddRightGroupbox("Shops")
-    addToggle(ShopsBox, "autoRaidShop", "Auto Raid Shop", "Buy configured items from the raid shop on lobby load")
-    addToggle(ShopsBox, "autoMerchant", "Auto Merchant",  "Buy configured items from the merchant on lobby load")
+
+    addToggle(ShopsBox, "autoRaidShop", "Auto Raid Shop", "Buy selected items from the GT City raid shop on lobby load")
+    local _raidItems = { "Dragonballs", "Gems", "Gold", "Omega Chest", "Omega Horns", "Omega Legs", "Perfect Cubes", "Reroll Cubes", "Trait Shards" }
+    local _raidDefault = {}
+    for _, v in ipairs(NS.settings.raidShopItems or {}) do _raidDefault[v] = true end
+    ShopsBox:AddDropdown("raidShopItemsDrop", {
+        Values   = _raidItems,
+        Default  = _raidDefault,
+        Multi    = true,
+        Text     = "Raid Shop Items",
+        Callback = function(Value)
+            local sel = {}
+            for item, on in pairs(Value) do if on then table.insert(sel, item) end end
+            NS.settings.raidShopItems = sel
+            State.saveSettings()
+        end,
+    })
+
+    addToggle(ShopsBox, "autoMerchant", "Auto Merchant", "Buy selected items from the merchant on lobby load")
+    local _merchantItems = { "Binding Cloth", "Eclipse Godstone", "Money Maker Boots", "Reroll Cubes", "Senzu", "Stormwake Sailcloth", "Trait Shards" }
+    local _merchantDefault = {}
+    for _, v in ipairs(NS.settings.merchantItems or {}) do _merchantDefault[v] = true end
+    ShopsBox:AddDropdown("merchantItemsDrop", {
+        Values   = _merchantItems,
+        Default  = _merchantDefault,
+        Multi    = true,
+        Text     = "Merchant Items",
+        Callback = function(Value)
+            local sel = {}
+            for item, on in pairs(Value) do if on then table.insert(sel, item) end end
+            NS.settings.merchantItems = sel
+            State.saveSettings()
+        end,
+    })
 
     -- ── Webhook ───────────────────────────────────────────────────
     local WebhookConfigBox = Tabs.Webhook:AddLeftGroupbox("Config")
