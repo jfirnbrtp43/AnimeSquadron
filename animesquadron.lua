@@ -1294,10 +1294,10 @@ local function runCustomAutoPlay(remotes)
     NS.customPlayGen = (NS.customPlayGen or 0) + 1
     local myGen = NS.customPlayGen
 
-    local ok, charData = pcall(function() return remotes.charsGet:InvokeServer() end)
-    if not ok or not charData then return end
+    local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
+    if not ok or not pdata then return end
     local slotUnits = {}
-    for _, char in pairs(charData.characters or {}) do
+    for _, char in pairs(pdata.characters or {}) do
         if char.equipped and char.index then
             slotUnits[char.index] = char.name
         end
