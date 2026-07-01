@@ -54,8 +54,10 @@ local _defaults = {
     summonAmount      = 1,       -- 1 or 10
     autoRaidShop      = false,
     raidShopItems     = {},      -- array of item names to buy from raid shop
+    raidKnownItems    = {},      -- accumulated list of all raid shop items ever seen
     autoMerchant      = false,
     merchantItems     = {},      -- array of item names to buy from merchant
+    merchantKnownItems = {},     -- accumulated list of all merchant items ever seen
     autoEvo           = false,
     evoTargets        = {},    -- unit names to awaken in priority order: {"Goki (SSJ4)", "Caska"}
     autoGear          = false,
@@ -1687,14 +1689,34 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
         end,
     })
 
+    -- Fetch current shop items and merge into saved accumulated lists
+    do
+        local shopsGetR = RS:FindFirstChild("Remotes") and RS.Remotes:FindFirstChild("Shops") and RS.Remotes.Shops:FindFirstChild("get")
+        if shopsGetR then
+            local function mergeShop(savedKey, shopId)
+                local ok, data = pcall(function() return shopsGetR:InvokeServer(shopId) end)
+                if not ok or not data then return end
+                local seen = {}
+                for _, v in ipairs(NS.settings[savedKey] or {}) do seen[v] = true end
+                for name in pairs(data) do seen[name] = true end
+                local list = {}
+                for name in pairs(seen) do table.insert(list, name) end
+                table.sort(list)
+                NS.settings[savedKey] = list
+            end
+            mergeShop("merchantKnownItems", "merchant")
+            mergeShop("raidKnownItems",     "gt_city_raid")
+            State.saveSettings()
+        end
+    end
+
     local ShopsBox = Tabs.Lobby:AddRightGroupbox("Shops")
 
     addToggle(ShopsBox, "autoRaidShop", "Auto Raid Shop", "Buy selected items from the GT City raid shop on lobby load")
-    local _raidItems = { "Dragonballs", "Gems", "Gold", "Omega Chest", "Omega Horns", "Omega Legs", "Perfect Cubes", "Reroll Cubes", "Trait Shards" }
     local _raidDefault = {}
     for _, v in ipairs(NS.settings.raidShopItems or {}) do _raidDefault[v] = true end
     ShopsBox:AddDropdown("raidShopItemsDrop", {
-        Values   = _raidItems,
+        Values   = NS.settings.raidKnownItems,
         Default  = _raidDefault,
         Multi    = true,
         Text     = "Raid Shop Items",
@@ -1707,11 +1729,10 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
     })
 
     addToggle(ShopsBox, "autoMerchant", "Auto Merchant", "Buy selected items from the merchant on lobby load")
-    local _merchantItems = { "Binding Cloth", "Eclipse Godstone", "Money Maker Boots", "Reroll Cubes", "Senzu", "Stormwake Sailcloth", "Trait Shards" }
     local _merchantDefault = {}
     for _, v in ipairs(NS.settings.merchantItems or {}) do _merchantDefault[v] = true end
     ShopsBox:AddDropdown("merchantItemsDrop", {
-        Values   = _merchantItems,
+        Values   = NS.settings.merchantKnownItems,
         Default  = _merchantDefault,
         Multi    = true,
         Text     = "Merchant Items",
