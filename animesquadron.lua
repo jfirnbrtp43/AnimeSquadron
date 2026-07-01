@@ -1355,6 +1355,34 @@ local function setupAutoUpgrade(remotes)
     log("Auto Upgrade loop active")
 end
 
+local function runBountyWatch(remotes)
+    if not NS.settings.autoBounty or not NS.activeBounty then return end
+    NS.bountyWatchGen = (NS.bountyWatchGen or 0) + 1
+    local myGen = NS.bountyWatchGen
+    local bounty = NS.activeBounty
+
+    while NS.bountyWatchGen == myGen and NS.settings.autoBounty do
+        task.wait(5)
+        local ok, pdata = pcall(function() return remotes.playersGet:InvokeServer() end)
+        if ok and pdata then
+            for _, b in ipairs(pdata.bounties or {}) do
+                if b.active and b.enemy == bounty.enemy then
+                    log("Bounty: " .. b.progress .. "/" .. b.required .. " kills")
+                    if NS.lblBountyStatus then
+                        NS.lblBountyStatus:SetText(b.enemy .. " " .. b.progress .. "/" .. b.required .. " (" .. b.world .. ")")
+                    end
+                    if b.progress >= b.required then
+                        log("Bounty: kill count reached — returning to lobby")
+                        pcall(function() remotes.teleport:FireServer() end)
+                        return
+                    end
+                    break
+                end
+            end
+        end
+    end
+end
+
 local function runCustomAutoPlay(remotes)
     NS.customPlayGen = (NS.customPlayGen or 0) + 1
     local myGen = NS.customPlayGen
@@ -1400,6 +1428,7 @@ local function setupIngame()
         setupFarmLoop(player, remotes)
         startChallengeReturnTimer(remotes)
         setupAutoUpgrade(remotes)
+        task.spawn(function() runBountyWatch(remotes) end)
         task.spawn(function() runCustomAutoPlay(remotes) end)
     end)
 
