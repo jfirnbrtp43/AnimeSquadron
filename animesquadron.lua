@@ -120,11 +120,11 @@ end
 local function sendWebhook(msg)
     local t = os.time()
     local ts = string.format("<t:%d:T>", t)  -- Discord timestamp tag, renders in viewer's timezone
-    _webhookPost({ username = "Anime Squadron", content = msg .. "  " .. ts })
+    _webhookPost({ username = "Zeno Hub", content = msg .. "  " .. ts })
 end
 
 local function sendWebhookEmbed(embed)
-    _webhookPost({ username = "Anime Squadron", embeds = { embed } })
+    _webhookPost({ username = "Zeno Hub", embeds = { embed } })
 end
 
 local function buildStageEmbed(resultText, stage, act, elapsed, pd, runCount)
@@ -204,7 +204,18 @@ local function evoPing()
 end
 
 NS.webhookTest = function()
-    sendWebhook("🔔 Test ping from Anime Squadron — webhook is working!")
+    local mockPd = {
+        stats      = { level = 42 },
+        characters = {
+            { equipped = true, index = 1, name = "Falcon" },
+            { equipped = true, index = 2, name = "Vegata (SSJ4 Full Power)" },
+            { equipped = true, index = 3, name = "Fastwagon" },
+            { equipped = true, index = 4, name = "Gometa (SSJ4)" },
+            { equipped = true, index = 5, name = "Shinks" },
+            { equipped = true, index = 6, name = "Berserker" },
+        },
+    }
+    sendWebhookEmbed(buildStageEmbed("Victory!", "GT City", 3, 187, mockPd, "12"))
 end
 
 -- ── State ────────────────────────────────────────────────────────
@@ -1516,7 +1527,7 @@ local function setupGUI()
     end
 
     local Window = Library:CreateWindow({
-        Title        = "Anime Squadron",
+        Title        = "Zeno Hub | Anime Squadron",
         Center       = true,
         AutoShow     = true,
         TabPadding   = 8,
@@ -2077,7 +2088,7 @@ local _JOIN_STORY_WORLDS     = {"GT City","Marine Lobby","Ninja Village","Eclips
     WebhookNotifBox:AddButton({
         Text    = "Test Webhook",
         Func    = function()
-            sendWebhook("🔔 Test ping from Anime Squadron — webhook is working!")
+            NS.webhookTest()
         end,
         Tooltip = "Send a test ping to verify the URL is working",
     })
