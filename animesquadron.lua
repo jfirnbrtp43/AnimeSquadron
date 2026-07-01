@@ -915,6 +915,10 @@ local function attemptAutoJoin(lobbyRemotes)
     for _, cfg in ipairs(NS.settings.joinModes) do
         if cfg.enabled then table.insert(enabled, cfg) end
     end
+    -- Auto Permanent injects itself independently of the Lobby Permanent toggle
+    if NS.settings.autoPermanent then
+        table.insert(enabled, { mode="Permanent", priority=6 })
+    end
     if #enabled == 0 then
         log("Auto Join: no modes enabled")
         return false
