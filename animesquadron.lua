@@ -1315,9 +1315,15 @@ end
 
 local function cacheYenCap()
     local ok, text = pcall(function()
-        return Players.LocalPlayer.PlayerGui.Menus.Perks.Yen_Max.amount.Text
+        local menus = Players.LocalPlayer.PlayerGui:WaitForChild("Menus", 10)
+        local perks = menus:WaitForChild("Perks", 10)
+        local yenMax = perks:WaitForChild("Yen_Max", 10)
+        return yenMax:WaitForChild("amount", 10).Text
     end)
-    if not ok or not text then return end
+    if not ok or not text then
+        log("Yen cap: Perks panel not ready — will retry next lobby load")
+        return
+    end
     local clean = text:gsub("<[^>]->", "")
     local current = clean:match("^(.-)%s*>") or clean
     local cap = parseAbbrevNumber(current)
